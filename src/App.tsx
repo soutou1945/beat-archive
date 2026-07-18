@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Badge, ClearDonut, TrendChart } from './components'
 import { makeSnapshot } from './csv'
 import {
+  aggregateChunithmRanks,
+  CHUNITHM_RANKS,
+  makeChunithmSnapshot,
+  recommendChunithm,
+  type ChunithmRecommendation,
+} from './chunithm'
+import {
   cloudConfigured,
   loadCloud,
   loadLocal,
@@ -11,7 +18,7 @@ import {
   signOut,
   supabase,
 } from './store'
-import type { Game, IidxScore, PersistedState, SdvxScore, Snapshot } from './types'
+import type { ChunithmScore, Game, IidxScore, PersistedState, SdvxScore, Snapshot } from './types'
 import { calculateTotalVf } from './vf'
 import { recommendSdvx, type SdvxRecommendation } from './recommendations'
 
@@ -31,6 +38,9 @@ const OFFICIAL_CSV_PAGES = {
   sdvx: 'https://p.eagate.573.jp/game/sdvx/vii/playdata/download/index.html',
   iidx: 'https://p.eagate.573.jp/game/2dx/33/djdata/score_download.html',
 }
+const CHUNITHM_NET = 'https://new.chunithm-net.com/chuni-mobile/html/mobile/home/'
+const CHUNITHM_BOOKMARKLET =
+  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=1';document.body.appendChild(s)})()"
 
 function latestSnapshot(snapshots: Snapshot[], game: Game) {
   return snapshots
@@ -77,7 +87,9 @@ function App() {
 
   const sdvxLatest = latestSnapshot(state.snapshots, 'sdvx')
   const iidxLatest = latestSnapshot(state.snapshots, 'iidx')
-  const activeSnapshot = game === 'sdvx' ? sdvxLatest : iidxLatest
+  const chunithmLatest = latestSnapshot(state.snapshots, 'chunithm')
+  const activeSnapshot =
+    game === 'sdvx' ? sdvxLatest : game === 'iidx' ? iidxLatest : chunithmLatest
 
   const sdvxTrend = useMemo(
     () =>
@@ -127,6 +139,26 @@ function App() {
     return counts
   }, [iidxLatest])
 
+  const chunithmRanks = useMemo(
+    () =>
+      aggregateChunithmRanks(
+        (chunithmLatest?.scores as ChunithmScore[] | undefined) ?? [],
+      ),
+    [chunithmLatest],
+  )
+
+  const chunithmRecommendations = useMemo(() => {
+    const snapshots = state.snapshots
+      .filter((snapshot) => snapshot.game === 'chunithm')
+      .sort((a, b) => b.importedAt.localeCompare(a.importedAt))
+    const current = (snapshots[0]?.scores as ChunithmScore[] | undefined) ?? []
+    const previous = (snapshots[1]?.scores as ChunithmScore[] | undefined) ?? []
+    return {
+      best: recommendChunithm(current, previous, 'best'),
+      new: recommendChunithm(current, previous, 'new'),
+    }
+  }, [state.snapshots])
+
   const importSnapshot = async (snapshot: Snapshot) => {
     setState((current) => ({ snapshots: [...current.snapshots, snapshot] }))
     if (sessionEmail) await saveCloud(snapshot)
@@ -153,6 +185,8 @@ function App() {
             sdvxTrend={sdvxTrend}
             sdvxRecommendations={sdvxRecommendations}
             iidxClearCounts={iidxClearCounts}
+            chunithmRanks={chunithmRanks}
+            chunithmRecommendations={chunithmRecommendations}
             onImport={() => setTab('import')}
             onSearch={() => setTab('search')}
           />
@@ -222,6 +256,9 @@ function GameSwitch({
       <button className={game === 'iidx' ? 'active' : ''} onClick={() => setGame('iidx')}>
         IIDX
       </button>
+      <button className={game === 'chunithm' ? 'active' : ''} onClick={() => setGame('chunithm')}>
+        CHUNITHM
+      </button>
     </div>
   )
 }
@@ -233,6 +270,8 @@ function Home({
   sdvxTrend,
   sdvxRecommendations,
   iidxClearCounts,
+  chunithmRanks,
+  chunithmRecommendations,
   onImport,
   onSearch,
 }: {
@@ -242,6 +281,8 @@ function Home({
   sdvxTrend: { label: string; value: number }[]
   sdvxRecommendations: SdvxRecommendation[]
   iidxClearCounts: Record<number, Record<string, number>>
+  chunithmRanks: Record<string, Record<string, Record<string, number>>>
+  chunithmRecommendations: { best: ChunithmRecommendation[]; new: ChunithmRecommendation[] }
   onImport: () => void
   onSearch: () => void
 }) {
@@ -257,8 +298,8 @@ function Home({
           <div className="pulse-mark">＋</div>
           <span className="eyebrow">READY TO SYNC</span>
           <h2>最初のスコアを<br />取り込もう。</h2>
-          <p>公式サイトからダウンロードしたCSVだけを読み込みます。ファイルは加工せず、そのままでOKです。</p>
-          <button className="primary-button" onClick={onImport}>CSVを取り込む</button>
+          <p>{game === 'chunithm' ? 'CHUNITHM-NETで表示中のスコアを専用ツールからJSON保存して読み込みます。' : '公式サイトからダウンロードしたCSVだけを読み込みます。ファイルは加工せず、そのままでOKです。'}</p>
+          <button className="primary-button" onClick={onImport}>{game === 'chunithm' ? '取込方法を見る' : 'CSVを取り込む'}</button>
         </section>
       ) : game === 'sdvx' ? (
         <>
@@ -334,7 +375,7 @@ function Home({
             </div>
           </section>
         </>
-      ) : (
+      ) : game === 'iidx' ? (
         <>
           <section className="hero-stat iidx-stat">
             <div><span className="eyebrow">ANOTHER + LEGGENDARIA</span><strong>{latest.scores.length}</strong></div>
@@ -358,9 +399,117 @@ function Home({
           </section>
           <button className="primary-button full" onClick={onSearch}>曲を検索する</button>
         </>
+      ) : (
+        <ChunithmHome
+          scores={latest.scores as ChunithmScore[]}
+          ranks={chunithmRanks}
+          recommendations={chunithmRecommendations}
+          onSearch={onSearch}
+        />
       )}
       {latest && <p className="updated">最終取込 {dateTimeLabel(latest.importedAt)} · {latest.fileName}</p>}
     </div>
+  )
+}
+
+function ChunithmHome({
+  scores,
+  ranks,
+  recommendations,
+  onSearch,
+}: {
+  scores: ChunithmScore[]
+  ranks: Record<string, Record<string, Record<string, number>>>
+  recommendations: { best: ChunithmRecommendation[]; new: ChunithmRecommendation[] }
+  onSearch: () => void
+}) {
+  const levels = Object.keys(ranks).sort((a, b) => Number.parseFloat(a) - Number.parseFloat(b))
+  const [selectedLevel, setSelectedLevel] = useState(levels.at(-1) ?? '')
+  const difficulties = Object.keys(ranks[selectedLevel] ?? {})
+  const [selectedDifficulty, setSelectedDifficulty] = useState(difficulties.includes('MASTER') ? 'MASTER' : difficulties[0] ?? '')
+  const values = ranks[selectedLevel]?.[selectedDifficulty] ?? {}
+  const total = Object.values(values).reduce((sum, value) => sum + value, 0)
+
+  useEffect(() => {
+    if (!ranks[selectedLevel] && levels.length) setSelectedLevel(levels.at(-1)!)
+  }, [levels, ranks, selectedLevel])
+
+  useEffect(() => {
+    const available = Object.keys(ranks[selectedLevel] ?? {})
+    if (!available.includes(selectedDifficulty)) {
+      setSelectedDifficulty(available.includes('MASTER') ? 'MASTER' : available[0] ?? '')
+    }
+  }, [ranks, selectedDifficulty, selectedLevel])
+
+  return (
+    <>
+      <section className="hero-stat chunithm-stat">
+        <div><span className="eyebrow">IMPORTED CHARTS</span><strong>{scores.length}</strong></div>
+        <p>CHUNITHM</p>
+      </section>
+      <section className="panel chunithm-rank-panel">
+        <div className="section-head">
+          <div><span className="eyebrow">SCORE STATUS</span><h2>ランク分布</h2></div>
+          <span>{total} CHARTS</span>
+        </div>
+        <div className="chunithm-filters">
+          <select value={selectedLevel} onChange={(event) => setSelectedLevel(event.target.value)} aria-label="レベル">
+            {levels.map((value) => <option value={value} key={value}>LV {value}</option>)}
+          </select>
+          <select value={selectedDifficulty} onChange={(event) => setSelectedDifficulty(event.target.value)} aria-label="難易度">
+            {Object.keys(ranks[selectedLevel] ?? {}).map((value) => <option value={value} key={value}>{value}</option>)}
+          </select>
+        </div>
+        <div className="rank-bars">
+          {CHUNITHM_RANKS.map((rank) => {
+            const count = values[rank] ?? 0
+            return (
+              <div className="rank-bar-row" key={rank}>
+                <strong>{rank}</strong>
+                <div><i style={{ width: `${total ? (count / total) * 100 : 0}%` }} /></div>
+                <span>{count}</span>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+      {(['best', 'new'] as const).map((frame) => (
+        <section className="panel recommendation-panel chunithm-recommendations" key={frame}>
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">{frame === 'best' ? 'BEST FRAME' : 'NEW SONG FRAME'}</span>
+              <h2>{frame === 'best' ? 'ベスト枠おすすめ' : '新曲枠おすすめ'}</h2>
+            </div>
+            <span>TOP {recommendations[frame].length}</span>
+          </div>
+          <div className="recommendation-list">
+            {recommendations[frame].map((item, index) => (
+              <article className="recommendation-card" key={item.score.id}>
+                <span className="recommendation-rank">{String(index + 1).padStart(2, '0')}</span>
+                <div className="recommendation-main">
+                  <div className="recommendation-title">
+                    <strong>{item.score.title}</strong>
+                    <Badge tone="orange">{item.score.difficulty} · LV {item.score.level}</Badge>
+                  </div>
+                  <p>{item.reason}</p>
+                  <div className="recommendation-metrics">
+                    <span><small>CURRENT</small><b>{numberLabel(item.score.score)}</b></span>
+                    <i>→</i>
+                    <span><small>TARGET</small><b>{numberLabel(item.targetScore)}</b></span>
+                    <span className="chunithm-target"><small>RANK</small><b>{item.targetRank}</b></span>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+          {recommendations[frame].length === 0 && (
+            <p className="empty-recommendation">この枠として取得された候補がありません。</p>
+          )}
+        </section>
+      ))}
+      <p className="recommendation-note chunithm-note">※ 次のスコアランクまでの距離と前回からの伸びを使った目安です。レーティング値は計算していません。</p>
+      <button className="primary-button full chunithm-button" onClick={onSearch}>曲を検索する</button>
+    </>
   )
 }
 
@@ -380,7 +529,7 @@ function Search({
   setQuery: (value: string) => void
   level: string
   setLevel: (value: string) => void
-  results: (SdvxScore | IidxScore)[]
+  results: (SdvxScore | IidxScore | ChunithmScore)[]
   hasData: boolean
 }) {
   return (
@@ -402,11 +551,17 @@ function Search({
       <div className="result-count">{hasData ? `${results.length}${results.length === 100 ? '+' : ''} RESULTS` : 'NO DATA'}</div>
       <div className="cards">
         {results.map((score) =>
-          game === 'sdvx' ? <SdvxCard key={score.id} score={score as SdvxScore} /> : <IidxCard key={score.id} score={score as IidxScore} />,
+          game === 'sdvx' ? (
+            <SdvxCard key={score.id} score={score as SdvxScore} />
+          ) : game === 'iidx' ? (
+            <IidxCard key={score.id} score={score as IidxScore} />
+          ) : (
+            <ChunithmCard key={score.id} score={score as ChunithmScore} />
+          ),
         )}
       </div>
       {hasData && results.length === 0 && <div className="empty-small">条件に合う譜面がありません。</div>}
-      {!hasData && <div className="empty-small">先に公式CSVを取り込んでください。</div>}
+      {!hasData && <div className="empty-small">先にスコアデータを取り込んでください。</div>}
     </div>
   )
 }
@@ -446,6 +601,23 @@ function IidxCard({ score }: { score: IidxScore }) {
   )
 }
 
+function ChunithmCard({ score }: { score: ChunithmScore }) {
+  return (
+    <article className="score-card chunithm-card">
+      <div className="card-top">
+        <div><Badge tone="orange">{score.difficulty}</Badge><span> LV {score.level}</span></div>
+        <Badge>{score.clear}</Badge>
+      </div>
+      <h3>{score.title}</h3>
+      <div className="metric-row">
+        <div><span>SCORE</span><strong>{numberLabel(score.score)}</strong></div>
+        <div><span>RANK</span><strong className="chunithm-accent">{score.rank}</strong></div>
+        <div><span>FRAME</span><strong>{score.frame?.toUpperCase() ?? '---'}</strong></div>
+      </div>
+    </article>
+  )
+}
+
 function ImportPanel({
   onImport,
   busy,
@@ -464,19 +636,23 @@ function ImportPanel({
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [importedAt, setImportedAt] = useState(() => new Date().toISOString().slice(0, 16))
+  const [bookmarkletCopied, setBookmarkletCopied] = useState(false)
 
   const runImport = async () => {
     if (!file) return
     setBusy(true)
     setMessage('')
     try {
-      const snapshot = makeSnapshot(await file.text(), file.name, new Date(importedAt).toISOString())
+      const text = await file.text()
+      const snapshot = file.name.toLowerCase().endsWith('.json')
+        ? makeChunithmSnapshot(text, file.name, new Date(importedAt))
+        : makeSnapshot(text, file.name, new Date(importedAt).toISOString())
       await onImport(snapshot)
       setMessage(`${snapshot.game.toUpperCase()}：${snapshot.scores.length}譜面を取り込みました。`)
       setFile(null)
       if (fileRef.current) fileRef.current.value = ''
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'CSVの取り込みに失敗しました。')
+      setMessage(error instanceof Error ? error.message : 'データの取り込みに失敗しました。')
     } finally {
       setBusy(false)
     }
@@ -484,7 +660,7 @@ function ImportPanel({
 
   return (
     <div className="page">
-      <div className="page-title"><span className="eyebrow">OFFICIAL CSV ONLY</span><h2>スコア取込</h2></div>
+      <div className="page-title"><span className="eyebrow">OFFICIAL DATA IMPORT</span><h2>スコア取込</h2></div>
       <section className="official-csv-panel">
         <div className="import-step">
           <span>01</span>
@@ -511,16 +687,52 @@ function ImportPanel({
           </div>
         </details>
       </section>
+      <section className="chunithm-setup panel">
+        <div className="section-head">
+          <div><span className="eyebrow">CHUNITHM MOBILE SETUP</span><h2>CHUNITHM取込</h2></div>
+          <Badge tone="orange">JSON</Badge>
+        </div>
+        <p>表示中のCHUNITHM-NET一覧を端末内に貯め、BEAT ARCHIVE用JSONとして保存します。ログイン情報やCookieは送信しません。</p>
+        <ol>
+          <li><strong>ブックマークを作る</strong><span>このページをブックマークし、名前を「zzba」に変更します。</span></li>
+          <li><strong>URLを置き換える</strong><span>下のボタンでコードをコピーし、ブックマークのURL欄へ貼り付けます。</span></li>
+          <li><strong>CHUNITHM-NETで実行</strong><span>スコア一覧、ベスト枠、新曲枠を順に開き、各ページで「zzba」の★付き候補をタップして追加します。</span></li>
+          <li><strong>JSONを取り込む</strong><span>表示されたパネルからJSONを保存し、この画面で選択します。</span></li>
+        </ol>
+        <button
+          className="secondary-button bookmarklet-copy"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(CHUNITHM_BOOKMARKLET)
+              setBookmarkletCopied(true)
+              setMessage('ブックマークレットをコピーしました。ブックマークのURL欄へ貼り付けてください。')
+            } catch {
+              setMessage('自動コピーできませんでした。下のコードを長押ししてコピーしてください。')
+            }
+          }}
+        >
+          {bookmarkletCopied ? 'コピー済み ✓' : 'ブックマークレットをコピー'}
+        </button>
+        <textarea className="bookmarklet-code" readOnly value={CHUNITHM_BOOKMARKLET} aria-label="ブックマークレットコード" />
+        <a className="chunithm-net-link" href={CHUNITHM_NET} target="_blank" rel="noreferrer">CHUNITHM-NETを開く ↗</a>
+        <details className="desktop-help">
+          <summary>Android Chromeで検索候補だけが表示される場合</summary>
+          <div>
+            <p>候補一覧の「zzba」という名前の<strong>★付きブックマーク</strong>をタップしてください。キーボードのEnterでは検索になります。</p>
+            <p>候補が出ない場合は「︙」→「ブックマーク」から zzba を直接開きます。</p>
+          </div>
+        </details>
+      </section>
       <label className="import-zone">
         <div className="upload-icon">⇧</div>
         <div className="import-step compact">
           <span>02</span>
-          <div><strong>{file ? file.name : 'ダウンロード済みCSVを選択'}</strong><small>{file ? `${numberLabel(file.size)} bytes` : '端末に保存した公式CSVを読み込みます'}</small></div>
+          <div><strong>{file ? file.name : 'CSVまたはCHUNITHM JSONを選択'}</strong><small>{file ? `${numberLabel(file.size)} bytes` : '端末に保存したスコアデータを読み込みます'}</small></div>
         </div>
         <input
           ref={fileRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,.json,text/csv,application/json"
           onChange={(event) => setFile(event.target.files?.[0] ?? null)}
         />
       </label>
@@ -539,7 +751,7 @@ function ImportPanel({
       <section className="howto panel">
         <span className="eyebrow">SUPPORTED FORMAT</span>
         <h3>取込ルール</h3>
-        <p>SDVXは全譜面を取り込み、現在VFをBest 50から算出します。IIDXはANOTHERとLEGGENDARIAだけを自動抽出します。</p>
+        <p>SDVXは全譜面を取り込み、現在VFをBest 50から算出します。IIDXはANOTHERとLEGGENDARIAだけを自動抽出します。CHUNITHMは専用ブックマークレットが保存したJSONだけを受け付けます。</p>
       </section>
     </div>
   )
@@ -601,7 +813,7 @@ function Settings({
         <h2>{state.snapshots.length}件の取込履歴</h2>
         <div className="history-list">
           {state.snapshots.slice().sort((a, b) => b.importedAt.localeCompare(a.importedAt)).map((snapshot) => (
-            <div key={snapshot.id}><Badge tone={snapshot.game === 'sdvx' ? 'green' : 'blue'}>{snapshot.game.toUpperCase()}</Badge><span>{dateTimeLabel(snapshot.importedAt)}</span><small>{snapshot.scores.length}譜面</small></div>
+            <div key={snapshot.id}><Badge tone={snapshot.game === 'sdvx' ? 'green' : snapshot.game === 'iidx' ? 'blue' : 'orange'}>{snapshot.game.toUpperCase()}</Badge><span>{dateTimeLabel(snapshot.importedAt)}</span><small>{snapshot.scores.length}譜面</small></div>
           ))}
         </div>
         {state.snapshots.length > 0 && (
