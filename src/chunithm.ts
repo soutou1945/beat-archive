@@ -49,7 +49,12 @@ const normalizeFrame = (value: unknown, isNewSong: boolean): ChunithmFrame => {
   return isNewSong ? 'new' : null
 }
 
-export function parseChunithmExport(text: string): ChunithmScore[] {
+export interface ChunithmExportData {
+  scores: ChunithmScore[]
+  playerRating?: number
+}
+
+export function parseChunithmExportData(text: string): ChunithmExportData {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
@@ -58,7 +63,7 @@ export function parseChunithmExport(text: string): ChunithmScore[] {
   }
 
   if (!parsed || typeof parsed !== 'object') throw new Error('CHUNITHMデータの形式が不正です。')
-  const source = parsed as { schema?: unknown; scores?: unknown }
+  const source = parsed as { schema?: unknown; scores?: unknown; playerRating?: unknown }
   if (source.schema !== CHUNITHM_SCHEMA) {
     throw new Error('BEAT ARCHIVE用のCHUNITHM JSONではありません。')
   }
@@ -89,18 +94,31 @@ export function parseChunithmExport(text: string): ChunithmScore[] {
     }
   })
 
+  let playerRating: number | undefined
+  if (source.playerRating !== undefined && source.playerRating !== null) {
+    playerRating = Number(source.playerRating)
+    if (!Number.isFinite(playerRating) || playerRating < 0 || playerRating > 100) {
+      throw new Error('CHUNITHMのプレイヤーレートが不正です。')
+    }
+  }
+
   const unique = new Map(scores.map((score) => [score.id, score]))
-  return [...unique.values()]
+  return { scores: [...unique.values()], playerRating }
+}
+
+export function parseChunithmExport(text: string): ChunithmScore[] {
+  return parseChunithmExportData(text).scores
 }
 
 export function makeChunithmSnapshot(text: string, fileName: string, importedAt = new Date()): Snapshot {
-  const scores = parseChunithmExport(text)
+  const { scores, playerRating } = parseChunithmExportData(text)
   return {
     id: crypto.randomUUID(),
     game: 'chunithm',
     importedAt: importedAt.toISOString(),
     fileName,
     scores,
+    playerRating,
   }
 }
 
