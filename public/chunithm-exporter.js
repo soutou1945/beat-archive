@@ -3,6 +3,7 @@
 
   const HOST = 'new.chunithm-net.com'
   const STORAGE_KEY = 'beat-archive:chunithm-export:v1'
+  const META_KEY = 'beat-archive:chunithm-meta:v1'
   const ROOT_ID = 'beat-archive-chunithm-exporter'
   const BASE = '/chuni-mobile/html/mobile/'
   const DIFFICULTIES = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'ULTIMA']
@@ -40,6 +41,41 @@
     } catch {
       return []
     }
+  }
+
+  const readMeta = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(META_KEY) || '{}')
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+
+  const capturePlayerRating = (doc) => {
+    const selectors = [
+      '.player_data_rating',
+      '.player_rating',
+      '.player_rating_num',
+      '[class*="player"][class*="rating"]',
+    ]
+    for (const selector of selectors) {
+      for (const element of doc.querySelectorAll(selector)) {
+        const match = normalize(element.textContent).match(/(\d{1,2}(?:\.\d{1,2})?)/)
+        const rating = Number(match?.[1])
+        if (Number.isFinite(rating) && rating >= 0 && rating <= 100) {
+          localStorage.setItem(META_KEY, JSON.stringify({ ...readMeta(), playerRating: rating }))
+          return rating
+        }
+      }
+    }
+    const labelMatch = normalize(doc.body?.textContent).match(/\bRATING\s*[：:]?\s*(\d{1,2}(?:\.\d{1,2})?)/i)
+    const rating = Number(labelMatch?.[1])
+    if (Number.isFinite(rating) && rating >= 0 && rating <= 100) {
+      localStorage.setItem(META_KEY, JSON.stringify({ ...readMeta(), playerRating: rating }))
+      return rating
+    }
+    return null
   }
 
   const saveMerged = (found) => {
@@ -192,6 +228,15 @@
     setBusy(true)
     const warnings = []
     let collected = 0
+    setStatus('プレイヤーレートを取得中：プレイヤー情報')
+    try {
+      const playerDoc = await fetchDocument(`${BASE}home/playerData`)
+      const playerRating = capturePlayerRating(playerDoc)
+      if (playerRating === null) throw new Error('レートを検出できません')
+    } catch (error) {
+      warnings.push(`プレイヤーレート: ${error instanceof Error ? error.message : '取得失敗'}`)
+    }
+    await wait(WAIT_MS)
     const tasks = [
       ...DIFFICULTIES.map((difficulty) => ({
         label: difficulty,
@@ -255,6 +300,7 @@
       schema: 'beat-archive.chunithm.v1',
       exportedAt: new Date().toISOString(),
       version: normalize(document.querySelector('.player_data_version, [class*="version"]')?.textContent),
+      playerRating: readMeta().playerRating ?? null,
       scores,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -283,14 +329,14 @@
       #${ROOT_ID} .ba-status{min-height:18px;margin:10px 0 0;color:#aeb6c5} #${ROOT_ID} .ba-status.ba-error{color:#ff8998}
     </style>
     <div class="ba-head"><div><h2>BEAT ARCHIVE</h2><p>CHUNITHMスコア取込</p></div><button class="ba-close" aria-label="閉じる">×</button></div>
-    <div class="ba-count">端末に保存済み：<strong>${readStored().length}譜面</strong></div>
+    <div class="ba-count">端末に保存済み：<strong class="ba-score-count">${readStored().length}譜面</strong><br>プレイヤーレート：<strong class="ba-rating">${readMeta().playerRating?.toFixed?.(2) ?? '--.--'}</strong></div>
     <div class="ba-actions">
       <button class="ba-auto">全ページを自動取得</button>
       <button class="ba-add">表示中ページだけ追加</button>
       <button class="ba-save">JSONを保存</button>
       <button class="ba-clear">端末内の収集データを消去</button>
     </div>
-    <p class="ba-status">難易度別の直接URLとレーティング枠を約4秒間隔で取得します（約30秒）。</p>
+    <p class="ba-status">プレイヤーレート、難易度別スコア、レーティング枠を約4秒間隔で取得します（約40秒）。</p>
   `
   document.body.appendChild(root)
 
@@ -298,7 +344,8 @@
     const status = root.querySelector('.ba-status')
     status.textContent = message
     status.classList.toggle('ba-error', error)
-    root.querySelector('.ba-count strong').textContent = `${readStored().length}譜面`
+    root.querySelector('.ba-score-count').textContent = `${readStored().length}譜面`
+    root.querySelector('.ba-rating').textContent = readMeta().playerRating?.toFixed?.(2) ?? '--.--'
   }
 
   const setBusy = (busy) => {
@@ -321,6 +368,9 @@
   root.querySelector('.ba-clear').addEventListener('click', () => {
     if (!confirm('CHUNITHM-NET内に保存した収集データを消去しますか？')) return
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(META_KEY)
     setStatus('収集データを消去しました。')
   })
+
+  if (location.pathname.includes('/home/playerData')) capturePlayerRating(document)
 })()
