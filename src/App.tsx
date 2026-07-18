@@ -28,7 +28,7 @@ const dateTimeLabel = (value: string) =>
   }).format(new Date(value))
 const numberLabel = (value: number) => new Intl.NumberFormat('ja-JP').format(value)
 const OFFICIAL_CSV_PAGES = {
-  sdvx: 'https://p.eagate.573.jp/game/sdvx/vi/playdata/download/index.html',
+  sdvx: 'https://p.eagate.573.jp/game/sdvx/vii/playdata/download/index.html',
   iidx: 'https://p.eagate.573.jp/game/2dx/33/djdata/score_download.html',
 }
 
