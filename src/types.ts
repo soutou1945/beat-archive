@@ -1,4 +1,4 @@
-export type Game = 'sdvx' | 'iidx'
+export type Game = 'sdvx' | 'iidx' | 'chunithm'
 
 export interface SdvxScore {
   id: string
@@ -33,12 +33,27 @@ export interface IidxScore {
   lastPlayedAt: string
 }
 
+export type ChunithmDifficulty = 'BASIC' | 'ADVANCED' | 'EXPERT' | 'MASTER' | 'ULTIMA'
+export type ChunithmFrame = 'best' | 'new' | null
+
+export interface ChunithmScore {
+  id: string
+  title: string
+  difficulty: ChunithmDifficulty
+  level: string
+  score: number
+  rank: string
+  clear: string
+  isNewSong: boolean
+  frame: ChunithmFrame
+}
+
 export interface Snapshot {
   id: string
   game: Game
   importedAt: string
   fileName: string
-  scores: SdvxScore[] | IidxScore[]
+  scores: SdvxScore[] | IidxScore[] | ChunithmScore[]
 }
 
 export interface PersistedState {
