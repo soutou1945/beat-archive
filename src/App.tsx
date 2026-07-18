@@ -40,7 +40,7 @@ const OFFICIAL_CSV_PAGES = {
 }
 const CHUNITHM_NET = 'https://new.chunithm-net.com/chuni-mobile/html/mobile/home/'
 const CHUNITHM_BOOKMARKLET =
-  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=3';document.body.appendChild(s)})()"
+  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=4';document.body.appendChild(s)})()"
 
 function latestSnapshot(snapshots: Snapshot[], game: Game) {
   return snapshots
@@ -402,6 +402,7 @@ function Home({
       ) : (
         <ChunithmHome
           scores={latest.scores as ChunithmScore[]}
+          playerRating={latest.playerRating}
           ranks={chunithmRanks}
           recommendations={chunithmRecommendations}
           onSearch={onSearch}
@@ -414,11 +415,13 @@ function Home({
 
 function ChunithmHome({
   scores,
+  playerRating,
   ranks,
   recommendations,
   onSearch,
 }: {
   scores: ChunithmScore[]
+  playerRating?: number
   ranks: Record<string, Record<string, Record<string, number>>>
   recommendations: { best: ChunithmRecommendation[]; new: ChunithmRecommendation[] }
   onSearch: () => void
@@ -444,7 +447,11 @@ function ChunithmHome({
   return (
     <>
       <section className="hero-stat chunithm-stat">
-        <div><span className="eyebrow">IMPORTED CHARTS</span><strong>{scores.length}</strong></div>
+        <div>
+          <span className="eyebrow">CURRENT RATING</span>
+          <strong>{playerRating === undefined ? '--.--' : playerRating.toFixed(2)}</strong>
+          <small className="chunithm-chart-count">{scores.length} IMPORTED CHARTS</small>
+        </div>
         <p>CHUNITHM</p>
       </section>
       <section className="panel chunithm-rank-panel">
@@ -648,7 +655,10 @@ function ImportPanel({
         ? makeChunithmSnapshot(text, file.name, new Date(importedAt))
         : makeSnapshot(text, file.name, new Date(importedAt).toISOString())
       await onImport(snapshot)
-      setMessage(`${snapshot.game.toUpperCase()}：${snapshot.scores.length}譜面を取り込みました。`)
+      const ratingMessage = snapshot.game === 'chunithm' && snapshot.playerRating !== undefined
+        ? ` / RATE ${snapshot.playerRating.toFixed(2)}`
+        : ''
+      setMessage(`${snapshot.game.toUpperCase()}：${snapshot.scores.length}譜面を取り込みました${ratingMessage}。`)
       setFile(null)
       if (fileRef.current) fileRef.current.value = ''
     } catch (error) {
@@ -692,11 +702,11 @@ function ImportPanel({
           <div><span className="eyebrow">CHUNITHM MOBILE SETUP</span><h2>CHUNITHM取込</h2></div>
           <Badge tone="orange">JSON</Badge>
         </div>
-        <p>CHUNITHM-NET内の難易度別一覧とレーティング枠を自動巡回し、BEAT ARCHIVE用JSONとして端末へ保存します。ログイン情報やCookieは送信しません。</p>
+        <p>CHUNITHM-NET内のプレイヤーレート、難易度別一覧、レーティング枠を自動取得し、BEAT ARCHIVE用JSONとして端末へ保存します。ログイン情報やCookieは送信しません。</p>
         <ol>
           <li><strong>ブックマークを作る</strong><span>このページをブックマークし、名前を「zzba」に変更します。</span></li>
           <li><strong>URLを置き換える</strong><span>下のボタンでコードをコピーし、ブックマークのURL欄へ貼り付けます。</span></li>
-          <li><strong>CHUNITHM-NETで実行</strong><span>ログイン後に「zzba」の★付き候補をタップし、「全ページを自動取得」を押します。約30秒かかるため、完了まで画面を閉じずにお待ちください。</span></li>
+          <li><strong>CHUNITHM-NETで実行</strong><span>ログイン後に「zzba」の★付き候補をタップし、「全ページを自動取得」を押します。約40秒かかるため、完了まで画面を閉じずにお待ちください。</span></li>
           <li><strong>JSONを取り込む</strong><span>表示されたパネルからJSONを保存し、この画面で選択します。</span></li>
         </ol>
         <button
