@@ -4,10 +4,10 @@
   const HOST = 'new.chunithm-net.com'
   const STORAGE_KEY = 'beat-archive:chunithm-export:v1'
   const ROOT_ID = 'beat-archive-chunithm-exporter'
-  const BASE = '/chuni-mobile/html/mobile/home/'
+  const BASE = '/chuni-mobile/html/mobile/'
   const DIFFICULTIES = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'ULTIMA']
   const DIFFICULTY_BY_NUMBER = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'ULTIMA']
-  const WAIT_MS = 950
+  const WAIT_MS = 4000
 
   if (location.hostname !== HOST) {
     alert('このツールはCHUNITHM-NET上で実行してください。')
@@ -153,16 +153,6 @@
     return forms.map((form) => parseBlock(form, { frame })).filter(Boolean)
   }
 
-  const tokenFromPage = () => {
-    const hidden = document.querySelector('input[name="token"]')?.value
-    if (hidden) return hidden
-    const tokenCookie = document.cookie
-      .split(';')
-      .map((part) => part.trim())
-      .find((part) => part.startsWith('_t='))
-    return tokenCookie ? decodeURIComponent(tokenCookie.slice(3)) : ''
-  }
-
   const fetchDocument = async (path, options = {}) => {
     const response = await fetch(new URL(path, location.origin), {
       credentials: 'include',
@@ -183,15 +173,7 @@
   }
 
   const difficultyRequest = async (difficulty) => {
-    const token = tokenFromPage()
-    if (!token) throw new Error('ページの認証トークンを確認できません。ホーム画面を再読み込みしてください')
-    const displayName = difficulty[0] + difficulty.slice(1).toLowerCase()
-    const body = new URLSearchParams({ genre: '99', token })
-    const doc = await fetchDocument(`${BASE}record/musicGenre/send${displayName}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-      body,
-    })
+    const doc = await fetchDocument(`${BASE}record/musicGenre/${difficulty.toLowerCase()}`)
     const scores = parseMusicList(doc, difficulty)
     if (!scores.length) throw new Error('楽曲一覧を検出できません')
     return scores
@@ -218,21 +200,21 @@
       {
         label: 'ベスト枠',
         run: async () => parseRatingPage(
-          await fetchDocument(`${BASE}playerData/ratingDetailBest/`),
+          await fetchDocument(`${BASE}home/playerData/ratingDetailBest/`),
           'best',
         ),
       },
       {
         label: '新曲枠',
         run: async () => parseRatingPage(
-          await fetchDocument(`${BASE}playerData/ratingDetailRecent/`),
+          await fetchDocument(`${BASE}home/playerData/ratingDetailRecent/`),
           'new',
         ),
       },
       {
         label: '候補枠',
         run: async () => parseRatingPage(
-          await fetchDocument(`${BASE}playerData/ratingDetailNext/`),
+          await fetchDocument(`${BASE}home/playerData/ratingDetailNext/`),
           null,
         ),
       },
@@ -308,7 +290,7 @@
       <button class="ba-save">JSONを保存</button>
       <button class="ba-clear">端末内の収集データを消去</button>
     </div>
-    <p class="ba-status">BASIC〜ULTIMAとレーティング枠を約1秒間隔で巡回します。</p>
+    <p class="ba-status">難易度別の直接URLとレーティング枠を約4秒間隔で取得します（約30秒）。</p>
   `
   document.body.appendChild(root)
 
