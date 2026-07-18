@@ -45,7 +45,7 @@ export function parseCsv(text: string): Row[] {
   )
 }
 
-export function detectGame(rows: Row[]): Game {
+export function detectGame(rows: Row[]): Exclude<Game, 'chunithm'> {
   const first = rows[0]
   if (!first) throw new Error('CSVにデータ行がありません。')
   if ('楽曲名' in first && 'ハイスコア' in first) return 'sdvx'
