@@ -40,7 +40,7 @@ const OFFICIAL_CSV_PAGES = {
 }
 const CHUNITHM_NET = 'https://new.chunithm-net.com/chuni-mobile/html/mobile/home/'
 const CHUNITHM_BOOKMARKLET =
-  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=1';document.body.appendChild(s)})()"
+  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=2';document.body.appendChild(s)})()"
 
 function latestSnapshot(snapshots: Snapshot[], game: Game) {
   return snapshots
@@ -692,11 +692,11 @@ function ImportPanel({
           <div><span className="eyebrow">CHUNITHM MOBILE SETUP</span><h2>CHUNITHM取込</h2></div>
           <Badge tone="orange">JSON</Badge>
         </div>
-        <p>表示中のCHUNITHM-NET一覧を端末内に貯め、BEAT ARCHIVE用JSONとして保存します。ログイン情報やCookieは送信しません。</p>
+        <p>CHUNITHM-NET内の難易度別一覧とレーティング枠を自動巡回し、BEAT ARCHIVE用JSONとして端末へ保存します。ログイン情報やCookieは送信しません。</p>
         <ol>
           <li><strong>ブックマークを作る</strong><span>このページをブックマークし、名前を「zzba」に変更します。</span></li>
           <li><strong>URLを置き換える</strong><span>下のボタンでコードをコピーし、ブックマークのURL欄へ貼り付けます。</span></li>
-          <li><strong>CHUNITHM-NETで実行</strong><span>スコア一覧、ベスト枠、新曲枠を順に開き、各ページで「zzba」の★付き候補をタップして追加します。</span></li>
+          <li><strong>CHUNITHM-NETで実行</strong><span>ログイン後に「zzba」の★付き候補をタップし、「全ページを自動取得」を押します。完了まで画面を閉じずにお待ちください。</span></li>
           <li><strong>JSONを取り込む</strong><span>表示されたパネルからJSONを保存し、この画面で選択します。</span></li>
         </ol>
         <button
