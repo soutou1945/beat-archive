@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   aggregateChunithmRanks,
+  makeChunithmSnapshot,
   parseChunithmExport,
   rankForChunithmScore,
   recommendChunithm,
@@ -33,6 +34,15 @@ describe('CHUNITHM import', () => {
 
   it('rejects unrelated JSON', () => {
     expect(() => parseChunithmExport('{}')).toThrow('BEAT ARCHIVE用')
+  })
+
+  it('stores the player rating in the snapshot', () => {
+    const snapshot = makeChunithmSnapshot(JSON.stringify({
+      schema: 'beat-archive.chunithm.v1',
+      playerRating: 12.25,
+      scores: [{ title: 'Song', difficulty: 'master', level: '14+', score: 1_007_600 }],
+    }), 'chunithm.json')
+    expect(snapshot.playerRating).toBe(12.25)
   })
 })
 
