@@ -46,23 +46,33 @@ export async function loadCloud(): Promise<Snapshot[]> {
     .select('id, game, imported_at, file_name, payload')
     .order('imported_at', { ascending: true })
   if (error) throw error
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    game: row.game,
-    importedAt: row.imported_at,
-    fileName: row.file_name,
-    scores: row.payload,
-  }))
+  return (data ?? []).map((row) => {
+    const payload = row.payload
+    const isWrappedChunithm = row.game === 'chunithm' && !Array.isArray(payload)
+    return {
+      id: row.id,
+      game: row.game,
+      importedAt: row.imported_at,
+      fileName: row.file_name,
+      scores: isWrappedChunithm ? payload?.scores ?? [] : payload,
+      playerRating: isWrappedChunithm && Number.isFinite(payload?.playerRating)
+        ? Number(payload.playerRating)
+        : undefined,
+    }
+  })
 }
 
 export async function saveCloud(snapshot: Snapshot) {
   if (!supabase) return
+  const payload = snapshot.game === 'chunithm'
+    ? { scores: snapshot.scores, playerRating: snapshot.playerRating }
+    : snapshot.scores
   const { error } = await supabase.from('score_snapshots').upsert({
     id: snapshot.id,
     game: snapshot.game,
     imported_at: snapshot.importedAt,
     file_name: snapshot.fileName,
-    payload: snapshot.scores,
+    payload,
   })
   if (error) throw error
 }
