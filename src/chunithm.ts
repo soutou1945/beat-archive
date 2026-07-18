@@ -156,8 +156,10 @@ export function recommendChunithm(
     .sort((a, b) => {
       const aDistance = a.targetScore - a.score.score
       const bDistance = b.targetScore - b.score.score
-      const aPriority = Math.min(a.recentGain, 20_000) * 2 - aDistance + Number.parseFloat(a.score.level) * 100
-      const bPriority = Math.min(b.recentGain, 20_000) * 2 - bDistance + Number.parseFloat(b.score.level) * 100
+      const aLevel = Number.parseFloat(a.score.level) || 0
+      const bLevel = Number.parseFloat(b.score.level) || 0
+      const aPriority = Math.min(a.recentGain, 20_000) * 2 - aDistance + aLevel * 100
+      const bPriority = Math.min(b.recentGain, 20_000) * 2 - bDistance + bLevel * 100
       return bPriority - aPriority
     })
     .slice(0, limit)
