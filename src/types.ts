@@ -54,6 +54,7 @@ export interface Snapshot {
   importedAt: string
   fileName: string
   scores: SdvxScore[] | IidxScore[] | ChunithmScore[]
+  playerRating?: number
 }
 
 export interface PersistedState {
