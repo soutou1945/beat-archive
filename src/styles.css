@@ -61,6 +61,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acid); outl
 .iidx-stat strong { color: var(--cyan); }
 .chunithm-stat { border-color: rgba(255,189,59,.2); background: linear-gradient(135deg, rgba(255,189,59,.1), transparent 50%), #101521; }
 .chunithm-stat strong { color: var(--chunithm); }
+.chunithm-chart-count { display: block; margin-top: 10px; color: #8f98aa; font: 700 11px 'Barlow Condensed'; letter-spacing: .13em; }
 .panel { background: rgba(18,23,36,.92); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
 .section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .section-head h2, .settings-panel h2 { font: 700 22px/1 'Barlow Condensed', 'Noto Sans JP'; margin: 5px 0 0; }
