@@ -27,6 +27,10 @@ const dateTimeLabel = (value: string) =>
     minute: '2-digit',
   }).format(new Date(value))
 const numberLabel = (value: number) => new Intl.NumberFormat('ja-JP').format(value)
+const OFFICIAL_CSV_PAGES = {
+  sdvx: 'https://p.eagate.573.jp/game/sdvx/vi/playdata/download/index.html',
+  iidx: 'https://p.eagate.573.jp/game/2dx/33/djdata/score_download.html',
+}
 
 function latestSnapshot(snapshots: Snapshot[], game: Game) {
   return snapshots
@@ -481,17 +485,45 @@ function ImportPanel({
   return (
     <div className="page">
       <div className="page-title"><span className="eyebrow">OFFICIAL CSV ONLY</span><h2>スコア取込</h2></div>
-      <section className="import-zone" onClick={() => fileRef.current?.click()}>
+      <section className="official-csv-panel">
+        <div className="import-step">
+          <span>01</span>
+          <div><strong>CSVを選択</strong><small>ゲームを選ぶと公式ダウンロードページが開きます</small></div>
+        </div>
+        <div className="official-link-grid">
+          <a href={OFFICIAL_CSV_PAGES.sdvx} target="_blank" rel="noreferrer">
+            <span>SDVX</span>
+            <strong>公式CSVページ</strong>
+            <i>↗</i>
+          </a>
+          <a href={OFFICIAL_CSV_PAGES.iidx} target="_blank" rel="noreferrer">
+            <span>IIDX</span>
+            <strong>公式CSVページ</strong>
+            <i>↗</i>
+          </a>
+        </div>
+        <details className="desktop-help">
+          <summary>スマホでCSVボタンが見つからない場合</summary>
+          <div>
+            <p><strong>iPhone / Safari</strong>：アドレスバーの「ぁあ」→「デスクトップ用Webサイトを表示」</p>
+            <p><strong>Android / Chrome</strong>：右上の「︙」→「PC版サイト」をオン</p>
+            <p>公式ページをPC版表示に切り替えてから、CSVをダウンロードしてください。</p>
+          </div>
+        </details>
+      </section>
+      <label className="import-zone">
         <div className="upload-icon">⇧</div>
-        <h3>{file ? file.name : 'CSVを選択'}</h3>
-        <p>{file ? `${numberLabel(file.size)} bytes` : 'SDVX / IIDX公式サイトからダウンロードしたファイル'}</p>
+        <div className="import-step compact">
+          <span>02</span>
+          <div><strong>{file ? file.name : 'ダウンロード済みCSVを選択'}</strong><small>{file ? `${numberLabel(file.size)} bytes` : '端末に保存した公式CSVを読み込みます'}</small></div>
+        </div>
         <input
           ref={fileRef}
           type="file"
           accept=".csv,text/csv"
           onChange={(event) => setFile(event.target.files?.[0] ?? null)}
         />
-      </section>
+      </label>
       <label className="field">
         <span>このデータの取得日時</span>
         <input type="datetime-local" value={importedAt} onChange={(event) => setImportedAt(event.target.value)} />
