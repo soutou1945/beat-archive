@@ -1,0 +1,11 @@
+node_modules
+dist
+.corepack
+.agents
+.codex
+outputs
+work
+*.tsbuildinfo
+.env
+.env.local
+*.log
