@@ -71,6 +71,26 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acid); outl
 .mini-score b { color: var(--acid); font: 700 18px 'Barlow Condensed'; }
 .updated { color: #555e72; text-align: center; font-size: 10px; margin: 16px 0; }
 
+.recommendation-panel { background: linear-gradient(145deg, rgba(183,247,47,.055), transparent 48%), rgba(18,23,36,.96); }
+.recommendation-intro { color: var(--muted); font-size: 10px; line-height: 1.7; margin: -3px 0 13px; }
+.recommendation-list { display: grid; gap: 8px; }
+.recommendation-card { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 8px; padding: 13px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(8,12,19,.5); }
+.recommendation-rank { color: var(--acid); font: 700 12px 'Barlow Condensed'; padding-top: 3px; }
+.recommendation-main { min-width: 0; }
+.recommendation-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.recommendation-title strong { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.recommendation-title .badge { flex: 0 0 auto; }
+.recommendation-card p { color: #8f98aa; font-size: 9px; line-height: 1.5; margin: 7px 0 10px; }
+.recommendation-metrics { display: grid; grid-template-columns: 1fr 14px 1fr .75fr; gap: 5px; align-items: end; padding-top: 9px; border-top: 1px solid var(--line); }
+.recommendation-metrics span small, .recommendation-metrics span b { display: block; }
+.recommendation-metrics small { color: #5e687b; font: 700 7px 'Barlow Condensed'; letter-spacing: .1em; }
+.recommendation-metrics b { margin-top: 2px; font: 700 14px 'Barlow Condensed'; }
+.recommendation-metrics > i { color: #566074; font-style: normal; font-size: 10px; padding-bottom: 2px; }
+.recommendation-metrics .vf-gain { text-align: right; }
+.recommendation-metrics .vf-gain b { color: var(--acid); }
+.recommendation-note { color: #555e72 !important; font-size: 8px !important; line-height: 1.5 !important; margin: 12px 0 0 !important; }
+.empty-recommendation { color: var(--muted); text-align: center; font-size: 10px; padding: 18px 0; }
+
 .donut-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .donut-card { text-align: center; border: 1px solid var(--line); border-radius: 12px; padding: 12px 4px; background: rgba(255,255,255,.015); }
 .donut { width: min(22vw, 92px); aspect-ratio: 1; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center; }

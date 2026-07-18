@@ -13,6 +13,7 @@ import {
 } from './store'
 import type { Game, IidxScore, PersistedState, SdvxScore, Snapshot } from './types'
 import { calculateTotalVf } from './vf'
+import { recommendSdvx, type SdvxRecommendation } from './recommendations'
 
 type Tab = 'home' | 'search' | 'import' | 'settings'
 
@@ -86,6 +87,17 @@ function App() {
     [state.snapshots],
   )
 
+  const sdvxRecommendations = useMemo(() => {
+    const snapshots = state.snapshots
+      .filter((snapshot) => snapshot.game === 'sdvx')
+      .sort((a, b) => b.importedAt.localeCompare(a.importedAt))
+    if (!snapshots[0]) return []
+    return recommendSdvx(
+      snapshots[0].scores as SdvxScore[],
+      (snapshots[1]?.scores as SdvxScore[] | undefined) ?? [],
+    )
+  }, [state.snapshots])
+
   const searchResults = useMemo(() => {
     if (!activeSnapshot) return []
     const normalized = query.trim().toLocaleLowerCase('ja')
@@ -135,6 +147,7 @@ function App() {
             setGame={setGame}
             latest={activeSnapshot}
             sdvxTrend={sdvxTrend}
+            sdvxRecommendations={sdvxRecommendations}
             iidxClearCounts={iidxClearCounts}
             onImport={() => setTab('import')}
             onSearch={() => setTab('search')}
@@ -214,6 +227,7 @@ function Home({
   setGame,
   latest,
   sdvxTrend,
+  sdvxRecommendations,
   iidxClearCounts,
   onImport,
   onSearch,
@@ -222,6 +236,7 @@ function Home({
   setGame: (game: Game) => void
   latest?: Snapshot
   sdvxTrend: { label: string; value: number }[]
+  sdvxRecommendations: SdvxRecommendation[]
   iidxClearCounts: Record<number, Record<string, number>>
   onImport: () => void
   onSearch: () => void
@@ -256,6 +271,48 @@ function Home({
               <span>{sdvxTrend.length} IMPORTS</span>
             </div>
             <TrendChart points={sdvxTrend} />
+          </section>
+          <section className="panel recommendation-panel">
+            <div className="section-head">
+              <div><span className="eyebrow">NEXT TARGETS</span><h2>伸びしろ候補</h2></div>
+              <span>TOP {sdvxRecommendations.length}</span>
+            </div>
+            <p className="recommendation-intro">
+              次の10万点とBEST 50への効果から、今狙いたい譜面を提案します。
+            </p>
+            <div className="recommendation-list">
+              {sdvxRecommendations.map((item, index) => (
+                <article className="recommendation-card" key={item.score.id}>
+                  <span className="recommendation-rank">{String(index + 1).padStart(2, '0')}</span>
+                  <div className="recommendation-main">
+                    <div className="recommendation-title">
+                      <strong>{item.score.title}</strong>
+                      <Badge tone="green">{item.score.difficulty} · LV {item.score.level}</Badge>
+                    </div>
+                    <p>{item.reason}</p>
+                    <div className="recommendation-metrics">
+                      <span>
+                        <small>CURRENT</small>
+                        <b>{numberLabel(item.score.score)}</b>
+                      </span>
+                      <i>→</i>
+                      <span>
+                        <small>TARGET</small>
+                        <b>{numberLabel(item.targetScore)}</b>
+                      </span>
+                      <span className="vf-gain">
+                        <small>VF UP</small>
+                        <b>+{item.chartVfGain.toFixed(3)}</b>
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {sdvxRecommendations.length === 0 && (
+              <p className="empty-recommendation">提案できるプレー済み譜面がありません。</p>
+            )}
+            <p className="recommendation-note">※ 現在のCSVをもとにした目安です。譜面の得意・不得意は考慮していません。</p>
           </section>
           <section className="panel">
             <div className="section-head">
