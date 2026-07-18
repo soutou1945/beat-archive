@@ -1,7 +1,7 @@
 create table if not exists public.score_snapshots (
   id uuid primary key,
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  game text not null check (game in ('sdvx', 'iidx')),
+  game text not null check (game in ('sdvx', 'iidx', 'chunithm')),
   imported_at timestamptz not null,
   file_name text not null,
   payload jsonb not null,
