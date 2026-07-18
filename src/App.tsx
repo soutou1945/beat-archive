@@ -40,7 +40,7 @@ const OFFICIAL_CSV_PAGES = {
 }
 const CHUNITHM_NET = 'https://new.chunithm-net.com/chuni-mobile/html/mobile/home/'
 const CHUNITHM_BOOKMARKLET =
-  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=2';document.body.appendChild(s)})()"
+  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=3';document.body.appendChild(s)})()"
 
 function latestSnapshot(snapshots: Snapshot[], game: Game) {
   return snapshots
@@ -696,7 +696,7 @@ function ImportPanel({
         <ol>
           <li><strong>ブックマークを作る</strong><span>このページをブックマークし、名前を「zzba」に変更します。</span></li>
           <li><strong>URLを置き換える</strong><span>下のボタンでコードをコピーし、ブックマークのURL欄へ貼り付けます。</span></li>
-          <li><strong>CHUNITHM-NETで実行</strong><span>ログイン後に「zzba」の★付き候補をタップし、「全ページを自動取得」を押します。完了まで画面を閉じずにお待ちください。</span></li>
+          <li><strong>CHUNITHM-NETで実行</strong><span>ログイン後に「zzba」の★付き候補をタップし、「全ページを自動取得」を押します。約30秒かかるため、完了まで画面を閉じずにお待ちください。</span></li>
           <li><strong>JSONを取り込む</strong><span>表示されたパネルからJSONを保存し、この画面で選択します。</span></li>
         </ol>
         <button
