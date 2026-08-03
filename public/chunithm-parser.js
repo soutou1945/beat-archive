@@ -37,7 +37,10 @@ const difficultyFromBlock = (block, forcedDifficulty) => {
   return DIFFICULTIES.find((value) => new RegExp(`\\b${value}\\b`, 'i').test(text)) || ''
 }
 
-export const parseScoreBlock = (block, { difficulty: forcedDifficulty = '', frame = null } = {}) => {
+export const parseScoreBlock = (
+  block,
+  { difficulty: forcedDifficulty = '', frame = null, level: forcedLevel = '' } = {},
+) => {
   const text = normalizeText(block.textContent)
   const difficulty = difficultyFromBlock(block, forcedDifficulty)
   if (!DIFFICULTIES.includes(difficulty)) return null
@@ -75,7 +78,7 @@ export const parseScoreBlock = (block, { difficulty: forcedDifficulty = '', fram
   ])
   const levelMatch = levelText.match(/(\d{1,2}(?:\.\d+)?\+?)/)
     || text.match(/(?:LEVEL|Lv\.?)\s*[：:]?\s*(\d{1,2}(?:\.\d+)?\+?)/i)
-  const level = normalizeText(levelMatch?.[1]) || '?'
+  const level = normalizeText(forcedLevel) || normalizeText(levelMatch?.[1]) || '?'
   if (!title || score <= 0 || score > 1010000) return null
 
   const iconSources = [...block.querySelectorAll('.play_musicdata_icon img, img')]
@@ -106,9 +109,9 @@ const parseBlocks = (blocks, options) => ({
   scores: blocks.map((block) => parseScoreBlock(block, options)).filter(Boolean),
 })
 
-export const parseMusicList = (doc, difficulty = '', frame = null) => {
+export const parseMusicList = (doc, difficulty = '', frame = null, level = '') => {
   const blocks = [...doc.querySelectorAll('.musiclist_box, [class*="musiclist_box"]')]
-  return parseBlocks(blocks, { difficulty, frame })
+  return parseBlocks(blocks, { difficulty, frame, level })
 }
 
 export const parseRatingPage = (doc, frame) => {
