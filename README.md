@@ -75,6 +75,8 @@ BASIC〜ULTIMA、ベスト枠、新曲枠などの取得完了後、「JSONを�
 
 自動巡回はユーザー操作で開始し、`/home/playerData` のプレイヤーレート、`/record/musicGenre/basic` から `/record/musicGenre/ultima` までの難易度別URL、レーティング枠へ約4秒間隔でアクセスします。完了まで約40秒かかります。ログイン情報・CookieをJSONへ含めたり、外部サーバーへスコアを送信したりすることはありません。
 
+取得結果は巡回中に一時保存され、全ページの解析に成功した場合だけ前回データを一括更新します。失敗時は前回データを変更せず、対象ページ、候補要素数、解析成功数などの診断情報を表示します。CHUNITHM-NETのHTML構造へ追従する際は、`public/chunithm-parser.js`と`src/fixtures/chunithm/`のfixtureテストを同時に更新してください。
+
 ## GitHub Pagesへの公開
 
 1. このフォルダをGitHubリポジトリの `main` ブランチへpushします。
