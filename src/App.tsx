@@ -40,7 +40,7 @@ const OFFICIAL_CSV_PAGES = {
 }
 const CHUNITHM_NET = 'https://new.chunithm-net.com/chuni-mobile/html/mobile/home/'
 const CHUNITHM_BOOKMARKLET =
-  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=4';document.body.appendChild(s)})()"
+  "javascript:(()=>{const s=document.createElement('script');s.src='https://soutou1945.github.io/beat-archive/chunithm-exporter.js?v=5';document.body.appendChild(s)})()"
 
 function latestSnapshot(snapshots: Snapshot[], game: Game) {
   return snapshots

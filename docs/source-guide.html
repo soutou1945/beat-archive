@@ -68,7 +68,8 @@
             <tr><td><code>src/vf.ts</code></td><td>SDVXの譜面別VFとBest 50合計を算出します。</td></tr>
             <tr><td><code>src/recommendations.ts</code></td><td>スコア更新、クリア更新など通常ゲーム向けのおすすめを生成します。</td></tr>
             <tr><td><code>src/store.ts</code></td><td>Supabase認証・同期と、未設定時のブラウザ保存を抽象化します。</td></tr>
-            <tr><td><code>public/chunithm-exporter.js</code></td><td>CHUNITHM-NET上で動くブックマークレット本体。公式ページを巡回しJSONを書き出します。</td></tr>
+            <tr><td><code>public/chunithm-exporter.js</code></td><td>CHUNITHM-NET上で動くブックマークレット本体。公式ページを巡回し、検証済みの結果をJSONへ書き出します。</td></tr>
+            <tr><td><code>public/chunithm-parser.js</code></td><td>CHUNITHM-NETのHTMLからレート、楽曲、レーティング枠を抽出する副作用のない解析器です。</td></tr>
             <tr><td><code>supabase/schema.sql</code></td><td>テーブル、制約、Row Level Securityを含む新規環境用SQLです。</td></tr>
             <tr><td><code>supabase/chunithm_migration.sql</code></td><td>既存環境へCHUNITHM対応を追加する移行SQLです。</td></tr>
             <tr><td><code>src/*.test.ts</code></td><td>取込、計算、推薦の回帰テストです。</td></tr>
@@ -93,7 +94,8 @@
         <h2>4. CHUNITHM関連コード</h2>
         <h3>4.1 取得ツール</h3>
         <p><code>public/chunithm-exporter.js</code>はCHUNITHM-NETと同じオリジン上で実行します。プレイヤー情報、BASIC〜ULTIMAの難易度別一覧、ベスト枠、新曲枠、候補枠を順番に取得します。リクエストにはログイン中のCookieを利用しますが、JSONへCookieや認証情報は格納しません。</p>
-        <p>HTMLの揺れに備え、曲名・レベル・スコアは複数セレクターから探索します。各譜面のIDは公式の<code>idx</code>と難易度を優先し、得られない場合は曲名と難易度を使用します。巡回途中の結果は同じIDでマージされ、レーティング枠情報が難易度一覧の値へ追加されます。</p>
+        <p>HTML解析は<code>public/chunithm-parser.js</code>へ分離されています。HTMLの揺れに備え、曲名・レベル・スコアは複数セレクターから探索します。各譜面のIDは公式の<code>idx</code>と難易度を優先し、得られない場合は曲名と難易度を使用します。解析器は候補要素数と解析成功数を別々に返すため、通信失敗とHTML構造変更を切り分けられます。</p>
+        <p>自動巡回中の結果は一時Map内で同じIDごとにマージされ、レーティング枠情報が難易度一覧の値へ追加されます。プレイヤーレート、全難易度、全レーティング枠を検証できた場合だけ保存済みデータを一括置換します。一つでも失敗した場合は更新を反映せず、前回成功時のデータを保持します。</p>
         <h3>4.2 JSON契約</h3>
         <pre><code>{
   "schema": "beat-archive.chunithm.v1",
@@ -117,8 +119,8 @@
         <h3>4.4 障害調査</h3>
         <ul>
           <li>「ログインが切れています」: CHUNITHM-NETへ再ログインしてから再実行します。</li>
-          <li>「楽曲一覧を検出できません」: 公式HTMLのclass名やURL変更を確認し、パーサーとfixtureテストを同時に更新します。</li>
-          <li>一部未取得: 表示された対象名を確認します。成功分は保持されるため、通信状態を整えて再実行できます。</li>
+          <li>「楽曲一覧を検出できません」: 表示される候補要素数・解析件数・URLを確認します。公式HTMLのclass名やURL変更時は、パーサーと<code>src/fixtures/chunithm/</code>のfixtureテストを同時に更新します。</li>
+          <li>「更新を反映しませんでした」: 表示された対象名とURLを確認します。巡回中の結果は破棄され、前回成功時の保存データは変更されません。</li>
           <li>枠が空: rating detailページのform構造と、各項目の難易度推定を確認します。</li>
         </ul>
       </section>

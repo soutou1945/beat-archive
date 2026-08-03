@@ -1,13 +1,13 @@
-(() => {
+(async () => {
   'use strict'
+
+  const scriptUrl = new URL(document.currentScript?.src || '/chunithm-exporter.js', location.href)
 
   const HOST = 'new.chunithm-net.com'
   const STORAGE_KEY = 'beat-archive:chunithm-export:v1'
   const META_KEY = 'beat-archive:chunithm-meta:v1'
   const ROOT_ID = 'beat-archive-chunithm-exporter'
   const BASE = '/chuni-mobile/html/mobile/'
-  const DIFFICULTIES = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'ULTIMA']
-  const DIFFICULTY_BY_NUMBER = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'ULTIMA']
   const WAIT_MS = 4000
 
   if (location.hostname !== HOST) {
@@ -21,18 +21,16 @@
     return
   }
 
-  const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim()
-  const numberFrom = (value) => Number(String(value || '').replace(/[^\d]/g, '')) || 0
+  const parserUrl = new URL('./chunithm-parser.js', scriptUrl)
+  parserUrl.search = scriptUrl.search
+  const {
+    DIFFICULTIES,
+    normalizeText: normalize,
+    parseMusicList,
+    parsePlayerRating,
+    parseRatingPage,
+  } = await import(parserUrl.href)
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const rankFor = (score) => {
-    if (score >= 1009000) return 'SSS+'
-    if (score >= 1007500) return 'SSS'
-    if (score >= 1005000) return 'SS+'
-    if (score >= 1000000) return 'SS'
-    if (score >= 990000) return 'S+'
-    if (score >= 975000) return 'S'
-    return 'AAA以下'
-  }
 
   const readStored = () => {
     try {
@@ -52,150 +50,55 @@
     }
   }
 
-  const capturePlayerRating = (doc) => {
-    const selectors = [
-      '.player_data_rating',
-      '.player_rating',
-      '.player_rating_num',
-      '[class*="player"][class*="rating"]',
-    ]
-    for (const selector of selectors) {
-      for (const element of doc.querySelectorAll(selector)) {
-        const match = normalize(element.textContent).match(/(\d{1,2}(?:\.\d{1,2})?)/)
-        const rating = Number(match?.[1])
-        if (Number.isFinite(rating) && rating >= 0 && rating <= 100) {
-          localStorage.setItem(META_KEY, JSON.stringify({ ...readMeta(), playerRating: rating }))
-          return rating
-        }
-      }
-    }
-    const labelMatch = normalize(doc.body?.textContent).match(/\bRATING\s*[：:]?\s*(\d{1,2}(?:\.\d{1,2})?)/i)
-    const rating = Number(labelMatch?.[1])
-    if (Number.isFinite(rating) && rating >= 0 && rating <= 100) {
-      localStorage.setItem(META_KEY, JSON.stringify({ ...readMeta(), playerRating: rating }))
-      return rating
-    }
-    return null
+  const storePlayerRating = (rating) => {
+    localStorage.setItem(META_KEY, JSON.stringify({ ...readMeta(), playerRating: rating }))
   }
 
-  const saveMerged = (found) => {
-    const merged = new Map(readStored().map((score) => [score.id, score]))
+  const capturePlayerRating = (doc) => {
+    const rating = parsePlayerRating(doc)
+    if (rating !== null) storePlayerRating(rating)
+    return rating
+  }
+
+  const mergeScores = (target, found) => {
     found.forEach((score) => {
-      const previous = merged.get(score.id)
-      merged.set(score.id, {
+      const previous = target.get(score.id)
+      target.set(score.id, {
         ...previous,
         ...score,
         frame: score.frame || previous?.frame || null,
         isNewSong: Boolean(score.isNewSong || previous?.isNewSong),
       })
     })
+    return target
+  }
+
+  const saveMerged = (found) => {
+    const merged = mergeScores(new Map(readStored().map((score) => [score.id, score])), found)
     const scores = [...merged.values()]
     localStorage.setItem(STORAGE_KEY, JSON.stringify(scores))
     return scores
   }
 
-  const findText = (block, selectors) => {
-    for (const selector of selectors) {
-      const value = normalize(block.querySelector(selector)?.textContent)
-      if (value) return value
-    }
-    return ''
+  const replaceStored = (scores) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(scores))
   }
 
-  const difficultyFromBlock = (block, forcedDifficulty) => {
-    if (DIFFICULTIES.includes(forcedDifficulty)) return forcedDifficulty
-    const inputDifficulty = Number(block.querySelector('input[name="diff"]')?.value)
-    if (Number.isInteger(inputDifficulty) && DIFFICULTY_BY_NUMBER[inputDifficulty]) {
-      return DIFFICULTY_BY_NUMBER[inputDifficulty]
-    }
-    const classText = `${block.className || ''} ${block.parentElement?.className || ''}`
-    const fromClass = classText.match(/bg_(basic|advanced|expert|master|ultima)/i)?.[1]
-    if (fromClass) return fromClass.toUpperCase()
-    const text = normalize(block.textContent)
-    return DIFFICULTIES.find((value) => new RegExp(`\\b${value}\\b`, 'i').test(text)) || ''
-  }
-
-  const parseBlock = (block, { difficulty: forcedDifficulty = '', frame = null } = {}) => {
-    const text = normalize(block.textContent)
-    const difficulty = difficultyFromBlock(block, forcedDifficulty)
-    if (!DIFFICULTIES.includes(difficulty)) return null
-
-    let title = findText(block, [
-      '.music_title',
-      '.music_title_block',
-      '.music_name',
-      '.musiclist_title',
-      '.musiclist_box_title',
-      '[class*="music"][class*="title"]',
-    ])
-    if (!title) {
-      title = text
-        .split(/SCORE|HIGH SCORE|LEVEL|Lv\.?|BASIC|ADVANCED|EXPERT|MASTER|ULTIMA/i)[0]
-        .replace(/NEW!/gi, '')
-        .trim()
-    }
-
-    const scoreText = findText(block, [
-      '.play_musicdata_highscore span',
-      '.play_musicdata_highscore',
-      'span.text_b',
-      '[class*="highscore"]',
-    ])
-    const scoreMatch = `${scoreText} ${text}`.match(/(?:HIGH\s*)?SCORE\s*[：:]?\s*([\d,]{6,9})|([\d,]{6,9})/)
-    const score = numberFrom(scoreMatch?.[1] || scoreMatch?.[2])
-
-    const levelText = findText(block, [
-      '.music_lv',
-      '.music_level',
-      '.play_musicdata_lv',
-      '[class*="music"][class*="level"]',
-      '[class*="music"][class*="_lv"]',
-    ])
-    const levelMatch = levelText.match(/(\d{1,2}(?:\.\d+)?\+?)/)
-      || text.match(/(?:LEVEL|Lv\.?)\s*[：:]?\s*(\d{1,2}(?:\.\d+)?\+?)/i)
-    const level = normalize(levelMatch?.[1]) || '?'
-    if (!title || score <= 0 || score > 1010000) return null
-
-    const iconSources = [...block.querySelectorAll('.play_musicdata_icon img, img')]
-      .map((image) => String(image.getAttribute('src') || '').toLowerCase())
-      .join(' ')
-    let clear = 'CLEAR'
-    if (/alljustice|all_justice/.test(iconSources) || /ALL\s*JUSTICE/i.test(text)) clear = 'ALL JUSTICE'
-    else if (/fullcombo|full_combo/.test(iconSources) || /FULL\s*COMBO/i.test(text)) clear = 'FULL COMBO'
-    else if (/failed|未クリア/i.test(text)) clear = 'FAILED'
-
-    const isNewSong = frame === 'new' || /\bNEW!?\b|新曲/i.test(text)
-    const sourceId = normalize(block.querySelector('input[name="idx"]')?.value)
-    return {
-      id: sourceId ? `${sourceId}::${difficulty}` : `${title}::${difficulty}`,
-      title,
-      difficulty,
-      level,
-      score,
-      rank: rankFor(score),
-      clear,
-      isNewSong,
-      frame: frame || (isNewSong ? 'new' : null),
-    }
-  }
-
-  const parseMusicList = (doc, difficulty, frame = null) => {
-    const blocks = [...doc.querySelectorAll('.musiclist_box, [class*="musiclist_box"]')]
-    return blocks.map((block) => parseBlock(block, { difficulty, frame })).filter(Boolean)
-  }
-
-  const parseRatingPage = (doc, frame) => {
-    const forms = [...doc.querySelectorAll('.w420 > .box05 > form, .box05 form')]
-    return forms.map((form) => parseBlock(form, { frame })).filter(Boolean)
-  }
 
   const fetchDocument = async (path, options = {}) => {
-    const response = await fetch(new URL(path, location.origin), {
-      credentials: 'include',
-      redirect: 'follow',
-      ...options,
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const requestUrl = new URL(path, location.origin)
+    let response
+    try {
+      response = await fetch(requestUrl, {
+        credentials: 'include',
+        redirect: 'follow',
+        ...options,
+      })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : '通信失敗'
+      throw new Error(`${reason}（${requestUrl.pathname}）`)
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}（${requestUrl.pathname}）`)
     const html = await response.text()
     const doc = new DOMParser().parseFromString(html, 'text/html')
     if (
@@ -208,17 +111,27 @@
     return doc
   }
 
+  const diagnostic = (label, result, path) =>
+    `${label}: 要素${result.blockCount}件／解析${result.scores.length}件（${path}）`
+
   const difficultyRequest = async (difficulty) => {
-    const doc = await fetchDocument(`${BASE}record/musicGenre/${difficulty.toLowerCase()}`)
-    const scores = parseMusicList(doc, difficulty)
-    if (!scores.length) throw new Error('楽曲一覧を検出できません')
-    return scores
+    const path = `${BASE}record/musicGenre/${difficulty.toLowerCase()}`
+    const doc = await fetchDocument(path)
+    const result = parseMusicList(doc, difficulty)
+    if (!result.scores.length) throw new Error(diagnostic('楽曲一覧を検出できません', result, path))
+    return { ...result, path }
+  }
+
+  const ratingRequest = async (path, frame) => {
+    const result = parseRatingPage(await fetchDocument(path), frame)
+    if (!result.scores.length) throw new Error(diagnostic('レーティング枠を検出できません', result, path))
+    return { ...result, path }
   }
 
   const collectVisible = () => {
-    const found = parseMusicList(document)
-    const scores = saveMerged(found)
-    return { added: found.length, total: scores.length }
+    const result = parseMusicList(document)
+    const scores = saveMerged(result.scores)
+    return { added: result.scores.length, detected: result.blockCount, total: scores.length }
   }
 
   let running = false
@@ -227,11 +140,12 @@
     running = true
     setBusy(true)
     const warnings = []
-    let collected = 0
+    const staged = new Map()
+    let playerRating = null
     setStatus('プレイヤーレートを取得中：プレイヤー情報')
     try {
       const playerDoc = await fetchDocument(`${BASE}home/playerData`)
-      const playerRating = capturePlayerRating(playerDoc)
+      playerRating = parsePlayerRating(playerDoc)
       if (playerRating === null) throw new Error('レートを検出できません')
     } catch (error) {
       warnings.push(`プレイヤーレート: ${error instanceof Error ? error.message : '取得失敗'}`)
@@ -244,24 +158,15 @@
       })),
       {
         label: 'ベスト枠',
-        run: async () => parseRatingPage(
-          await fetchDocument(`${BASE}home/playerData/ratingDetailBest/`),
-          'best',
-        ),
+        run: () => ratingRequest(`${BASE}home/playerData/ratingDetailBest/`, 'best'),
       },
       {
         label: '新曲枠',
-        run: async () => parseRatingPage(
-          await fetchDocument(`${BASE}home/playerData/ratingDetailRecent/`),
-          'new',
-        ),
+        run: () => ratingRequest(`${BASE}home/playerData/ratingDetailRecent/`, 'new'),
       },
       {
         label: '候補枠',
-        run: async () => parseRatingPage(
-          await fetchDocument(`${BASE}home/playerData/ratingDetailNext/`),
-          null,
-        ),
+        run: () => ratingRequest(`${BASE}home/playerData/ratingDetailNext/`, null),
       },
     ]
 
@@ -269,10 +174,8 @@
       const task = tasks[index]
       setStatus(`取得中 ${index + 1}/${tasks.length}：${task.label}`)
       try {
-        const found = await task.run()
-        saveMerged(found)
-        collected += found.length
-        if (!found.length) warnings.push(`${task.label}: データなし`)
+        const result = await task.run()
+        mergeScores(staged, result.scores)
       } catch (error) {
         warnings.push(`${task.label}: ${error instanceof Error ? error.message : '取得失敗'}`)
       }
@@ -281,13 +184,14 @@
 
     running = false
     setBusy(false)
-    const total = readStored().length
-    if (!collected) {
-      setStatus(`スコアを取得できませんでした。${warnings.join('／')}`, true)
+    if (warnings.length || !staged.size) {
+      setStatus(`更新を反映しませんでした。保存済みデータは変更していません。${warnings.join('／')}`, true)
       return
     }
-    const warningText = warnings.length ? ` 一部未取得：${warnings.join('／')}` : ''
-    setStatus(`自動巡回が完了しました（合計${total}譜面）。${warningText}`, warnings.length > 0)
+    const scores = [...staged.values()]
+    replaceStored(scores)
+    if (playerRating !== null) storePlayerRating(playerRating)
+    setStatus(`全ページを検証し、${scores.length}譜面へ更新しました。`)
   }
 
   const download = () => {
@@ -359,7 +263,7 @@
   root.querySelector('.ba-add').addEventListener('click', () => {
     const result = collectVisible()
     if (!result.added) {
-      setStatus('この画面ではスコア一覧を検出できませんでした。「全ページを自動取得」をお試しください。', true)
+      setStatus(`この画面ではスコアを解析できませんでした（候補要素${result.detected}件）。「全ページを自動取得」をお試しください。`, true)
       return
     }
     setStatus(`表示中の${result.added}譜面を追加しました（合計${result.total}譜面）。`)
@@ -373,4 +277,7 @@
   })
 
   if (location.pathname.includes('/home/playerData')) capturePlayerRating(document)
-})()
+})().catch((error) => {
+  const reason = error instanceof Error ? error.message : '不明なエラー'
+  alert(`BEAT ARCHIVEの起動に失敗しました。${reason}`)
+})
