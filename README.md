@@ -2,6 +2,8 @@
 
 SDVXとbeatmania IIDXの公式CSV、およびCHUNITHM-NETでユーザーが表示したスコアを読み込み、スマートフォンで現在スコアと推移を確認するReact + TypeScriptアプリです。
 
+ソースコードの構成、データフロー、CHUNITHM取得処理、保守手順は [HTML版ソースコード説明書](docs/source-guide.html) にまとめています。
+
 ## できること
 
 - SDVX / IIDXの公式CSVを自動判定して取込

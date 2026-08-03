@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BEAT ARCHIVE ソースコード説明書</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #08111f; color: #dbeafe; }
+      body { max-width: 1080px; margin: auto; padding: 2rem 1.25rem 5rem; line-height: 1.75; }
+      h1, h2, h3 { color: #fff; line-height: 1.3; }
+      h1 { font-size: clamp(2rem, 6vw, 4rem); margin-bottom: .25rem; }
+      h2 { margin-top: 3rem; padding-bottom: .4rem; border-bottom: 1px solid #334155; }
+      a { color: #67e8f9; }
+      code { color: #f0abfc; background: #172033; padding: .1rem .35rem; border-radius: .3rem; }
+      pre { overflow: auto; background: #020617; border: 1px solid #334155; padding: 1rem; border-radius: .75rem; }
+      table { width: 100%; border-collapse: collapse; display: block; overflow-x: auto; }
+      th, td { border: 1px solid #334155; padding: .6rem; text-align: left; vertical-align: top; }
+      th { background: #172033; }
+      .lead { color: #94a3b8; font-size: 1.1rem; }
+      .card { background: #101827; border: 1px solid #334155; border-radius: 1rem; padding: 1rem 1.25rem; margin: 1rem 0; }
+      .flow { font-weight: 700; color: #a5f3fc; }
+      nav ul { columns: 2; }
+      @media (max-width: 640px) { nav ul { columns: 1; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <p>Developer documentation</p>
+      <h1>BEAT ARCHIVE<br />ソースコード説明書</h1>
+      <p class="lead">SDVX・beatmania IIDX・CHUNITHMの記録を取り込み、分析・同期・表示するWebアプリの構成と保守手順。</p>
+    </header>
+
+    <nav class="card" aria-label="目次">
+      <h2>目次</h2>
+      <ul>
+        <li><a href="#overview">全体像</a></li>
+        <li><a href="#structure">ファイル構成</a></li>
+        <li><a href="#flow">データフロー</a></li>
+        <li><a href="#chunithm">CHUNITHM</a></li>
+        <li><a href="#other-games">SDVX / IIDX</a></li>
+        <li><a href="#storage">保存と同期</a></li>
+        <li><a href="#ui">画面構成</a></li>
+        <li><a href="#database">データベース</a></li>
+        <li><a href="#development">開発・テスト</a></li>
+        <li><a href="#maintenance">変更時の確認項目</a></li>
+      </ul>
+    </nav>
+
+    <main>
+      <section id="overview">
+        <h2>1. 全体像</h2>
+        <p>React 19、TypeScript、Viteで構成された単一ページアプリです。取込ファイルはブラウザで解析され、Supabase設定時はログインユーザー専用の行として同期されます。未設定時はブラウザの保存領域へ退避します。</p>
+        <p class="flow">入力ファイル → パーサー → Snapshot → Store → 集計・推薦 → React UI</p>
+        <p>全ゲームの取込履歴は共通の<code>Snapshot</code>型へ変換されるため、表示側はゲームごとの差を限定したまま、最新値と前回値を比較できます。</p>
+      </section>
+
+      <section id="structure">
+        <h2>2. ファイル構成</h2>
+        <table>
+          <thead><tr><th>パス</th><th>役割</th></tr></thead>
+          <tbody>
+            <tr><td><code>src/main.tsx</code></td><td>Reactの起点。ルートDOMへアプリを描画します。</td></tr>
+            <tr><td><code>src/App.tsx</code></td><td>認証、取込、ゲーム切替、最新スナップショット選択など、画面全体の状態を統括します。</td></tr>
+            <tr><td><code>src/components.tsx</code></td><td>カード、履歴グラフ、ランプ集計、CHUNITHM分布・推薦などの表示部品です。</td></tr>
+            <tr><td><code>src/types.ts</code></td><td>譜面、スコア、ゲーム種別、取込履歴の共有型を定義します。</td></tr>
+            <tr><td><code>src/csv.ts</code></td><td>SDVX / IIDXのCSV判定、文字コード処理、正規化、Snapshot生成を担当します。</td></tr>
+            <tr><td><code>src/chunithm.ts</code></td><td>CHUNITHM JSONの検証・正規化、ランク集計、推薦候補の算出を担当します。</td></tr>
+            <tr><td><code>src/vf.ts</code></td><td>SDVXの譜面別VFとBest 50合計を算出します。</td></tr>
+            <tr><td><code>src/recommendations.ts</code></td><td>スコア更新、クリア更新など通常ゲーム向けのおすすめを生成します。</td></tr>
+            <tr><td><code>src/store.ts</code></td><td>Supabase認証・同期と、未設定時のブラウザ保存を抽象化します。</td></tr>
+            <tr><td><code>public/chunithm-exporter.js</code></td><td>CHUNITHM-NET上で動くブックマークレット本体。公式ページを巡回しJSONを書き出します。</td></tr>
+            <tr><td><code>supabase/schema.sql</code></td><td>テーブル、制約、Row Level Securityを含む新規環境用SQLです。</td></tr>
+            <tr><td><code>supabase/chunithm_migration.sql</code></td><td>既存環境へCHUNITHM対応を追加する移行SQLです。</td></tr>
+            <tr><td><code>src/*.test.ts</code></td><td>取込、計算、推薦の回帰テストです。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="flow">
+        <h2>3. データフロー</h2>
+        <ol>
+          <li><strong>取込:</strong> ユーザーがCSVまたはCHUNITHM JSONを選択します。</li>
+          <li><strong>解析:</strong> CSVは<code>parseCsvSnapshot</code>系、JSONは<code>makeChunithmSnapshot</code>で検証されます。</li>
+          <li><strong>正規化:</strong> ゲーム固有データを共通の<code>Snapshot</code>へまとめ、取込日時とファイル名を付与します。</li>
+          <li><strong>永続化:</strong> <code>saveSnapshot</code>がSupabaseまたはブラウザ保存を選択します。</li>
+          <li><strong>比較:</strong> 最新と一つ前のSnapshotから推移や更新量を算出します。</li>
+          <li><strong>表示:</strong> ゲーム別ダッシュボードが集計表、グラフ、推薦を描画します。</li>
+        </ol>
+        <div class="card"><strong>重要:</strong> パーサーは外部入力との境界です。型アサーションだけに頼らず、必須値・数値範囲・ゲーム識別子を実行時にも検証します。</div>
+      </section>
+
+      <section id="chunithm">
+        <h2>4. CHUNITHM関連コード</h2>
+        <h3>4.1 取得ツール</h3>
+        <p><code>public/chunithm-exporter.js</code>はCHUNITHM-NETと同じオリジン上で実行します。プレイヤー情報、BASIC〜ULTIMAの難易度別一覧、ベスト枠、新曲枠、候補枠を順番に取得します。リクエストにはログイン中のCookieを利用しますが、JSONへCookieや認証情報は格納しません。</p>
+        <p>HTMLの揺れに備え、曲名・レベル・スコアは複数セレクターから探索します。各譜面のIDは公式の<code>idx</code>と難易度を優先し、得られない場合は曲名と難易度を使用します。巡回途中の結果は同じIDでマージされ、レーティング枠情報が難易度一覧の値へ追加されます。</p>
+        <h3>4.2 JSON契約</h3>
+        <pre><code>{
+  "schema": "beat-archive.chunithm.v1",
+  "exportedAt": "ISO 8601 date",
+  "playerRating": 12.34,
+  "scores": [{
+    "id": "music-id::MASTER",
+    "title": "曲名",
+    "difficulty": "MASTER",
+    "level": "14+",
+    "score": 1007500,
+    "rank": "SSS",
+    "clear": "CLEAR",
+    "isNewSong": false,
+    "frame": "best"
+  }]
+}</code></pre>
+        <p><code>src/chunithm.ts</code>はschema、配列、難易度、曲名、レベル、スコア範囲、プレイヤーレートを検証します。同一IDは最後の項目を採用します。ランク表示は入力文字列ではなくスコア閾値から再計算でき、集計の一貫性を保ちます。</p>
+        <h3>4.3 推薦</h3>
+        <p>ベスト枠と新曲枠を分離し、次のランクまでの距離、前回からの伸び、レベルを加味して候補を並べます。MAX到達済みと未プレイは除外し、上位10件を表示します。</p>
+        <h3>4.4 障害調査</h3>
+        <ul>
+          <li>「ログインが切れています」: CHUNITHM-NETへ再ログインしてから再実行します。</li>
+          <li>「楽曲一覧を検出できません」: 公式HTMLのclass名やURL変更を確認し、パーサーとfixtureテストを同時に更新します。</li>
+          <li>一部未取得: 表示された対象名を確認します。成功分は保持されるため、通信状態を整えて再実行できます。</li>
+          <li>枠が空: rating detailページのform構造と、各項目の難易度推定を確認します。</li>
+        </ul>
+      </section>
+
+      <section id="other-games">
+        <h2>5. SDVX / IIDX</h2>
+        <p><code>src/csv.ts</code>がヘッダーからゲームを判定し、表記揺れを吸収します。SDVXはスコア・EXスコア・クリアランク・グレードを取り込み、<code>src/vf.ts</code>で譜面別VFを算出します。IIDXはANOTHER / LEGGENDARIAを対象としてEXスコア、ミスカウント、クリアランプを保持します。</p>
+        <p>CSV仕様が変わった場合は、ヘッダー別名、列インデックス、数値変換の順で確認し、匿名化した最小入力をテストへ追加してください。</p>
+      </section>
+
+      <section id="storage">
+        <h2>6. 保存と同期</h2>
+        <p><code>src/store.ts</code>は環境変数<code>VITE_SUPABASE_URL</code>と<code>VITE_SUPABASE_ANON_KEY</code>が揃う場合だけSupabaseクライアントを有効化します。ログイン時はスナップショットをユーザーIDに紐付け、RLSにより本人だけが操作できます。</p>
+        <p>Supabase未設定時のブラウザ保存は開発・試用向けです。ブラウザデータ削除や端末変更では失われるため、継続運用ではSupabaseを設定します。CHUNITHM-NETのログインCookieはBEAT ARCHIVEへ渡りません。</p>
+      </section>
+
+      <section id="ui">
+        <h2>7. 画面構成</h2>
+        <p><code>src/App.tsx</code>がゲーム、検索条件、取込中状態、認証状態を保持します。純粋な計算は各ドメインモジュールへ委譲し、<code>src/components.tsx</code>は受け取った値を描画します。見た目は<code>src/styles.css</code>へ集約され、モバイル幅を基準に調整されています。</p>
+        <p>新しい表示を追加するときは、まず純粋関数として計算とテストを作り、その結果をpropsでコンポーネントへ渡すと、画面とロジックを独立して保守できます。</p>
+      </section>
+
+      <section id="database">
+        <h2>8. データベース</h2>
+        <p><code>score_snapshots</code>はユーザー、ゲーム、取込日時、ファイル名、JSON payloadを保持します。新規構築は<code>supabase/schema.sql</code>を一括実行し、既存のSDVX / IIDX環境は<code>supabase/chunithm_migration.sql</code>を適用します。</p>
+        <p>ゲーム追加時はTypeScriptのunion型、取込処理、UIだけでなく、データベースの<code>game</code>制約も必ず更新してください。RLSを無効化した状態で公開しないでください。</p>
+      </section>
+
+      <section id="development">
+        <h2>9. 開発・テスト</h2>
+        <pre><code>pnpm install
+pnpm dev
+pnpm test
+pnpm build</code></pre>
+        <p><code>pnpm test</code>はVitestの単体テスト、<code>pnpm build</code>はTypeScriptの型検査とViteの本番生成を実行します。Windowsでは同梱の<code>pnpm.cmd</code>も利用できます。</p>
+        <p>環境値は<code>.env.local</code>に置き、Gitへ登録しません。anon keyは公開クライアント用ですが、データの分離は必ずRLSで保証します。</p>
+      </section>
+
+      <section id="maintenance">
+        <h2>10. 変更時の確認項目</h2>
+        <ul>
+          <li>外部入力に空値、重複、不正な数値、未知の難易度があっても明確に処理されるか。</li>
+          <li>CHUNITHMの公式ページ変更時、一覧・レーティング枠・プレイヤーレートを個別に確認したか。</li>
+          <li>最新履歴だけでなく、前回履歴との比較結果が正しいか。</li>
+          <li>Supabase有効・無効の両方で、保存と再読込が成立するか。</li>
+          <li>スマートフォン幅、長い曲名、データ0件、通信失敗を確認したか。</li>
+          <li><code>pnpm test</code>と<code>pnpm build</code>が成功したか。</li>
+          <li>仕様変更をREADMEとこの説明書へ反映したか。</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
