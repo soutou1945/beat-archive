@@ -1,4 +1,27 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('./generated/chunithmMusic', () => ({
+  CHUNITHM_MUSIC_MASTER_UPDATED_AT: '2026-08-04T00:00:00.000Z',
+  CHUNITHM_MUSIC_MASTER: [
+    {
+      musicId: 'music-1',
+      title: 'Song',
+      difficulty: 'MASTER',
+      level: '14+',
+      constant: 14.8,
+      maxCombo: 1234,
+    },
+    {
+      musicId: 'music-2',
+      title: 'New',
+      difficulty: 'MASTER',
+      level: '14+',
+      constant: 14.7,
+      maxCombo: 1200,
+    },
+  ],
+}))
+
 import {
   aggregateChunithmRanks,
   makeChunithmSnapshot,
@@ -22,14 +45,39 @@ const score = (overrides: Partial<ChunithmScore> = {}): ChunithmScore => ({
 })
 
 describe('CHUNITHM import', () => {
-  it('parses and normalizes an exporter file', () => {
+  it('楽曲マスターからレベルと譜面情報を補完する', () => {
     const result = parseChunithmExport(
       JSON.stringify({
         schema: 'beat-archive.chunithm.v1',
-        scores: [{ title: 'Song', difficulty: 'master', level: '14+', score: 1_007_600 }],
+        scores: [{ title: 'Song', difficulty: 'master', score: 1_007_600 }],
       }),
     )
-    expect(result[0]).toMatchObject({ difficulty: 'MASTER', rank: 'SSS', frame: null })
+    expect(result[0]).toMatchObject({
+      difficulty: 'MASTER',
+      level: '14+',
+      rank: 'SSS',
+      frame: null,
+      musicId: 'music-1',
+      constant: 14.8,
+      maxCombo: 1234,
+    })
+  })
+
+  it('表記の正規化後に楽曲マスターと照合する', () => {
+    const result = parseChunithmExport(
+      JSON.stringify({
+        schema: 'beat-archive.chunithm.v1',
+        scores: [{ title: 'Ｓｏｎｇ', difficulty: 'master', score: 1_000_000 }],
+      }),
+    )
+    expect(result[0].musicId).toBe('music-1')
+  })
+
+  it('楽曲マスターにない譜面は登録を止める', () => {
+    expect(() => parseChunithmExport(JSON.stringify({
+      schema: 'beat-archive.chunithm.v1',
+      scores: [{ title: 'Unknown', difficulty: 'master', score: 1_000_000 }],
+    }))).toThrow('楽曲マスターと一致しない')
   })
 
   it('rejects unrelated JSON', () => {
@@ -40,7 +88,7 @@ describe('CHUNITHM import', () => {
     const snapshot = makeChunithmSnapshot(JSON.stringify({
       schema: 'beat-archive.chunithm.v1',
       playerRating: 12.25,
-      scores: [{ title: 'Song', difficulty: 'master', level: '14+', score: 1_007_600 }],
+      scores: [{ title: 'Song', difficulty: 'master', score: 1_007_600 }],
     }), 'chunithm.json')
     expect(snapshot.playerRating).toBe(12.25)
   })

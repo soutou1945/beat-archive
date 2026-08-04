@@ -1,0 +1,39 @@
+name: CHUNITHM楽曲マスター更新リマインド
+
+on:
+  schedule:
+    # 毎月1日 09:00 JST。chunirec APIにはアクセスせず、メール送信だけを行います。
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 運営者へ更新確認メールを送信
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.REMINDER_SMTP_SERVER }}
+          server_port: ${{ secrets.REMINDER_SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.REMINDER_SMTP_USERNAME }}
+          password: ${{ secrets.REMINDER_SMTP_PASSWORD }}
+          subject: '[BEAT ARCHIVE] CHUNITHM楽曲マスター更新確認'
+          to: ${{ secrets.REMINDER_EMAIL_TO }}
+          from: ${{ secrets.REMINDER_EMAIL_FROM }}
+          body: |
+            BEAT ARCHIVE運営者様
+
+            CHUNITHM楽曲マスターの月次更新確認です。
+            CHUNITHMやchunirec側に更新がある場合だけ、ローカル環境で次のコマンドを手動実行してください。
+
+            PowerShell:
+            $env:CHUNIREC_ACCESS_TOKEN="アクセストークン"
+            npm run update:chunithm-music
+            Remove-Item Env:CHUNIREC_ACCESS_TOKEN
+
+            このメール送信ワークフローはchunirec APIへアクセスしません。
+            更新後は src/generated/chunithmMusic.ts の差分を確認し、問題がなければ npm test と npm run build を実行してからコミットしてください。

@@ -7,9 +7,8 @@
   const META_KEY = 'beat-archive:chunithm-meta:v1'
   const ROOT_ID = 'beat-archive-chunithm-exporter'
   const BASE = '/chuni-mobile/html/mobile/'
-  const LEVEL_SEARCH_PATH = `${BASE}record/musicLevel/search/`
   const WAIT_MS = 2000
-  const RETRY_WAIT_MS = 4000
+  const DIFFICULTIES = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'ULTIMA']
 
   if (location.hostname !== HOST) {
     alert('このツールはCHUNITHM-NET上で実行してください。')
@@ -45,16 +44,6 @@
     }
   }
 
-  const storePlayerRating = (rating) => {
-    localStorage.setItem(META_KEY, JSON.stringify({ ...readMeta(), playerRating: rating }))
-  }
-
-  const capturePlayerRating = (doc) => {
-    const rating = parsePlayerRating(doc)
-    if (rating !== null) storePlayerRating(rating)
-    return rating
-  }
-
   const mergeScores = (target, found) => {
     found.forEach((score) => {
       const previous = target.get(score.id)
@@ -75,15 +64,11 @@
     return scores
   }
 
-  const replaceStored = (scores) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(scores))
-  }
-
-  const fetchDocument = async (path, options = {}) => {
+  const fetchDocument = async (path) => {
     const requestUrl = new URL(path, location.origin)
     let response
     try {
-      response = await fetch(requestUrl, { credentials: 'include', redirect: 'follow', ...options })
+      response = await fetch(requestUrl, { credentials: 'include', redirect: 'follow' })
     } catch (error) {
       const reason = error instanceof Error ? error.message : '通信失敗'
       throw new Error(`${reason}（${requestUrl.pathname}）`)
@@ -103,74 +88,11 @@
   const diagnostic = (label, result, path) =>
     `${label}: 要素${result.blockCount}件／解析${result.scores.length}件（${path}）`
 
-  const normalizeLevelLabel = (value) => normalize(value).replace(/^LEVEL\s*/i, '')
-
-  const readLevelSearchForm = (doc) => {
-    const select = doc.querySelector('select[name="level"]')
-    const form = select?.closest('form')
-    if (!select || !form) throw new Error('レベル検索フォームを検出できません')
-
-    const levels = [...select.options]
-      .map((option) => ({ value: String(option.value), label: normalizeLevelLabel(option.textContent) }))
-      .filter((level) => level.value && level.label)
-    if (!levels.length) throw new Error('取得可能なレベルを検出できません')
-
-    return {
-      action: form.getAttribute('action') || LEVEL_SEARCH_PATH,
-      method: normalize(form.getAttribute('method') || 'GET').toUpperCase(),
-      form,
-      levels,
-    }
-  }
-
-  const buildSearchRequest = (searchForm, levelValue) => {
-    const params = new URLSearchParams()
-    for (const element of searchForm.form.elements) {
-      if (!element.name || element.disabled) continue
-      if (element.name === 'level') {
-        params.set(element.name, levelValue)
-        continue
-      }
-      if ((element.type === 'checkbox' || element.type === 'radio') && !element.checked) continue
-      params.append(element.name, element.value)
-    }
-
-    if (searchForm.method === 'POST') {
-      return {
-        path: searchForm.action,
-        options: {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-          body: params.toString(),
-        },
-      }
-    }
-
-    const url = new URL(searchForm.action, location.origin)
-    url.search = params.toString()
-    return { path: url.href, options: { method: 'GET' } }
-  }
-
-  const levelRequest = async (searchForm, level) => {
-    const request = buildSearchRequest(searchForm, level.value)
-    const result = parseMusicList(await fetchDocument(request.path, request.options), '', null, level.label)
-    if (!result.scores.length) {
-      throw new Error(diagnostic(`LEVEL ${level.label}を検出できません`, result, request.path))
-    }
+  const difficultyRequest = async (difficulty) => {
+    const path = `${BASE}record/musicGenre/${difficulty.toLowerCase()}`
+    const result = parseMusicList(await fetchDocument(path), difficulty)
+    if (!result.scores.length) throw new Error(diagnostic('楽曲一覧を検出できません', result, path))
     return result
-  }
-
-  const requestWithRetry = async (run) => {
-    try {
-      return await run()
-    } catch (firstError) {
-      await wait(RETRY_WAIT_MS)
-      try {
-        return await run()
-      } catch {
-        throw firstError
-      }
-    }
   }
 
   const ratingRequest = async (path, frame) => {
@@ -179,13 +101,8 @@
     return result
   }
 
-  const selectedLevelFromDocument = () => {
-    const selected = document.querySelector('select[name="level"] option:checked')
-    return normalizeLevelLabel(selected?.textContent)
-  }
-
   const collectVisible = () => {
-    const result = parseMusicList(document, '', null, selectedLevelFromDocument())
+    const result = parseMusicList(document)
     const scores = saveMerged(result.scores)
     return { added: result.scores.length, detected: result.blockCount, total: scores.length }
   }
@@ -196,14 +113,10 @@
     running = true
     setBusy(true)
     const warnings = []
-    const staged = new Map(readStored().map((score) => [score.id, score]))
+    const staged = new Map()
     let playerRating = null
-    let successfulLevels = 0
 
     try {
-      setStatus('レベル検索条件を取得中')
-      const searchForm = readLevelSearchForm(await fetchDocument(LEVEL_SEARCH_PATH))
-
       setStatus('プレイヤーレートを取得中')
       try {
         const playerDoc = await fetchDocument(`${BASE}home/playerData`)
@@ -214,16 +127,15 @@
       }
       await wait(WAIT_MS)
 
-      for (let index = 0; index < searchForm.levels.length; index += 1) {
-        const level = searchForm.levels[index]
-        setStatus(`取得中 ${index + 1}/${searchForm.levels.length}：LEVEL ${level.label}`)
+      for (let index = 0; index < DIFFICULTIES.length; index += 1) {
+        const difficulty = DIFFICULTIES[index]
+        setStatus(`取得中 ${index + 1}/${DIFFICULTIES.length}：${difficulty}`)
         try {
-          mergeScores(staged, (await requestWithRetry(() => levelRequest(searchForm, level))).scores)
-          successfulLevels += 1
+          mergeScores(staged, (await difficultyRequest(difficulty)).scores)
         } catch (error) {
-          warnings.push(`LEVEL ${level.label}: ${error instanceof Error ? error.message : '取得失敗'}`)
+          warnings.push(`${difficulty}: ${error instanceof Error ? error.message : '取得失敗'}`)
         }
-        if (index < searchForm.levels.length - 1) await wait(WAIT_MS)
+        if (index < DIFFICULTIES.length - 1) await wait(WAIT_MS)
       }
 
       const ratingTasks = [
@@ -235,25 +147,25 @@
         const task = ratingTasks[index]
         setStatus(`レーティング枠を取得中 ${index + 1}/${ratingTasks.length}：${task.label}`)
         try {
-          mergeScores(staged, (await requestWithRetry(() => ratingRequest(task.path, task.frame))).scores)
+          mergeScores(staged, (await ratingRequest(task.path, task.frame)).scores)
         } catch (error) {
           warnings.push(`${task.label}: ${error instanceof Error ? error.message : '取得失敗'}`)
         }
         if (index < ratingTasks.length - 1) await wait(WAIT_MS)
       }
 
-      if (!successfulLevels) {
-        setStatus(`スコアを更新できませんでした。保存済みデータは変更していません。${warnings.join('／')}`, true)
+      if (!staged.size) {
+        setStatus(`スコアを取得できませんでした。保存済みデータは変更していません。${warnings.join('／')}`, true)
         return
       }
 
       const scores = [...staged.values()]
-      replaceStored(scores)
-      if (playerRating !== null) storePlayerRating(playerRating)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(scores))
+      if (playerRating !== null) {
+        localStorage.setItem(META_KEY, JSON.stringify({ ...readMeta(), playerRating }))
+      }
       const warningText = warnings.length ? ` 未取得: ${warnings.join('／')}` : ''
-      setStatus(`${successfulLevels}/${searchForm.levels.length}レベルを取得し、${scores.length}譜面へ更新しました。${warningText}`, warnings.length > 0)
-    } catch (error) {
-      setStatus(`更新を反映しませんでした。${error instanceof Error ? error.message : '取得失敗'}`, true)
+      setStatus(`${scores.length}譜面へ更新しました。${warningText}`, warnings.length > 0)
     } finally {
       running = false
       setBusy(false)
@@ -263,7 +175,7 @@
   const download = () => {
     const scores = readStored()
     if (!scores.length) {
-      setStatus('保存できるデータがありません。先に「全レベルを自動取得」を押してください。', true)
+      setStatus('保存できるデータがありません。先に「難易度別スコアを取得」を押してください。', true)
       return
     }
     const payload = {
@@ -301,12 +213,12 @@
     <div class="ba-head"><div><h2>BEAT ARCHIVE</h2><p>CHUNITHMスコア取込</p></div><button class="ba-close" aria-label="閉じる">×</button></div>
     <div class="ba-count">端末に保存済み：<strong class="ba-score-count">${readStored().length}譜面</strong><br>プレイヤーレート：<strong class="ba-rating">${readMeta().playerRating?.toFixed?.(2) ?? '--.--'}</strong></div>
     <div class="ba-actions">
-      <button class="ba-auto">全レベルを自動取得</button>
-      <button class="ba-add">表示中レベルだけ追加</button>
+      <button class="ba-auto">難易度別スコアを取得</button>
+      <button class="ba-add">表示中ページだけ追加</button>
       <button class="ba-save">JSONを保存</button>
       <button class="ba-clear">端末内の収集データを消去</button>
     </div>
-    <p class="ba-status">レベル検索の全選択肢とレーティング枠を約2秒間隔で取得します。</p>
+    <p class="ba-status">BASIC〜ULTIMAとレーティング枠を約2秒間隔で取得します。</p>
   `
   document.body.appendChild(root)
 
@@ -327,7 +239,7 @@
   root.querySelector('.ba-add').addEventListener('click', () => {
     const result = collectVisible()
     if (!result.added) {
-      setStatus(`この画面ではスコアを解析できませんでした（候補要素${result.detected}件）。レベル検索結果を表示してから再実行してください。`, true)
+      setStatus(`この画面ではスコアを解析できませんでした（候補要素${result.detected}件）。`, true)
       return
     }
     setStatus(`表示中の${result.added}譜面を追加しました（合計${result.total}譜面）。`)
@@ -339,8 +251,6 @@
     localStorage.removeItem(META_KEY)
     setStatus('収集データを消去しました。')
   })
-
-  if (location.pathname.includes('/home/playerData')) capturePlayerRating(document)
 })().catch((error) => {
   const reason = error instanceof Error ? error.message : '不明なエラー'
   alert(`BEAT ARCHIVEの起動に失敗しました。${reason}`)

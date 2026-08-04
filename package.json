@@ -2,13 +2,13 @@
   "name": "bemani-score-deck",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@11.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader runner",
     "build": "tsc -b && vite build --configLoader runner",
     "preview": "vite preview --configLoader runner",
-    "test": "vitest run --configLoader runner"
+    "test": "vitest run --configLoader runner",
+    "update:chunithm-music": "node scripts/update-chunithm-music.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.52.1",
