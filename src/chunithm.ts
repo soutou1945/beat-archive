@@ -1,3 +1,8 @@
+import {
+  CHUNITHM_MUSIC_MASTER,
+  CHUNITHM_MUSIC_MASTER_UPDATED_AT,
+  type ChunithmMusicChartMaster,
+} from './generated/chunithmMusic'
 import type {
   ChunithmDifficulty,
   ChunithmFrame,
@@ -49,12 +54,42 @@ const normalizeFrame = (value: unknown, isNewSong: boolean): ChunithmFrame => {
   return isNewSong ? 'new' : null
 }
 
+const normalizeMusicTitle = (value: string) => value
+  .normalize('NFKC')
+  .replace(/[‐‑‒–—―ー−]/g, '-')
+  .replace(/[～〜]/g, '~')
+  .replace(/[’‘]/g, "'")
+  .replace(/[“”]/g, '"')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLocaleLowerCase('ja')
+
+const masterKey = (title: string, difficulty: ChunithmDifficulty) =>
+  `${normalizeMusicTitle(title)}::${difficulty}`
+
+const masterCandidates = new Map<string, ChunithmMusicChartMaster[]>()
+for (const chart of CHUNITHM_MUSIC_MASTER) {
+  const key = masterKey(chart.title, chart.difficulty)
+  const current = masterCandidates.get(key) ?? []
+  current.push(chart)
+  masterCandidates.set(key, current)
+}
+
+const resolveMaster = (title: string, difficulty: ChunithmDifficulty) => {
+  const candidates = masterCandidates.get(masterKey(title, difficulty)) ?? []
+  return candidates.length === 1 ? candidates[0] : null
+}
+
 export interface ChunithmExportData {
   scores: ChunithmScore[]
   playerRating?: number
 }
 
 export function parseChunithmExportData(text: string): ChunithmExportData {
+  if (!CHUNITHM_MUSIC_MASTER_UPDATED_AT || CHUNITHM_MUSIC_MASTER.length === 0) {
+    throw new Error('CHUNITHM楽曲マスターが未設定です。運営者が手動更新してから再度取り込んでください。')
+  }
+
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
@@ -69,30 +104,42 @@ export function parseChunithmExportData(text: string): ChunithmExportData {
   }
   if (!Array.isArray(source.scores)) throw new Error('楽曲データが見つかりません。')
 
+  const unresolved: string[] = []
   const scores = source.scores.map((raw, index): ChunithmScore => {
     if (!raw || typeof raw !== 'object') throw new Error(`${index + 1}件目のデータが不正です。`)
     const item = raw as Record<string, unknown>
     const title = asString(item.title)
     const difficulty = normalizeDifficulty(item.difficulty)
     const score = Number(item.score)
-    const level = asString(item.level)
     const isNewSong = asBoolean(item.isNewSong)
-    if (!title || !level || !Number.isFinite(score) || score < 0 || score > 1_010_000) {
-      throw new Error(`${index + 1}件目の曲名・レベル・スコアが不正です。`)
+    if (!title || !Number.isFinite(score) || score < 0 || score > 1_010_000) {
+      throw new Error(`${index + 1}件目の曲名・スコアが不正です。`)
     }
+
+    const master = resolveMaster(title, difficulty)
+    if (!master) unresolved.push(`${title} [${difficulty}]`)
     const suppliedId = asString(item.id)
     return {
       id: suppliedId || `${title}::${difficulty}`,
       title,
       difficulty,
-      level,
+      level: master?.level ?? '?',
       score: Math.trunc(score),
       rank: asString(item.rank) || rankForChunithmScore(score),
       clear: asString(item.clear) || 'NO DATA',
       isNewSong,
       frame: normalizeFrame(item.frame, isNewSong),
+      musicId: master?.musicId,
+      constant: master?.constant,
+      maxCombo: master?.maxCombo,
     }
   })
+
+  if (unresolved.length > 0) {
+    const examples = unresolved.slice(0, 10).join('、')
+    const suffix = unresolved.length > 10 ? ` ほか${unresolved.length - 10}譜面` : ''
+    throw new Error(`楽曲マスターと一致しない譜面が${unresolved.length}件あります: ${examples}${suffix}`)
+  }
 
   let playerRating: number | undefined
   if (source.playerRating !== undefined && source.playerRating !== null) {
