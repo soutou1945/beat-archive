@@ -30,8 +30,10 @@ jobs:
             CHUNITHM楽曲マスターの月次更新確認です。
             CHUNITHMやchunirec側に更新がある場合だけ、ローカル環境で次のコマンドを手動実行してください。
 
-            CHUNIREC_ACCESS_TOKENを設定
-            pnpm update:chunithm-music
+            PowerShell:
+            $env:CHUNIREC_ACCESS_TOKEN="アクセストークン"
+            npm run update:chunithm-music
+            Remove-Item Env:CHUNIREC_ACCESS_TOKEN
 
             このメール送信ワークフローはchunirec APIへアクセスしません。
-            更新後は src/generated/chunithmMusic.ts の差分を確認し、問題がなければコミットしてください。
+            更新後は src/generated/chunithmMusic.ts の差分を確認し、問題がなければ npm test と npm run build を実行してからコミットしてください。
