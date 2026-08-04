@@ -46,6 +46,9 @@ export interface ChunithmScore {
   clear: string
   isNewSong: boolean
   frame: ChunithmFrame
+  musicId?: string
+  constant?: number | null
+  maxCombo?: number | null
 }
 
 export interface Snapshot {
