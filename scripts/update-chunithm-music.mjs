@@ -35,6 +35,16 @@ const difficultyMap = {
   ULT: 'ULTIMA',
 }
 
+const levelLabel = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return String(value ?? '').trim()
+  if (Number.isInteger(numeric)) return String(numeric)
+  if (numeric * 2 === Math.trunc(numeric * 2) && numeric % 1 === 0.5) {
+    return `${Math.floor(numeric)}+`
+  }
+  return String(numeric)
+}
+
 const charts = []
 for (const music of payload) {
   if (!music || typeof music !== 'object' || !music.meta || !music.data) continue
@@ -45,7 +55,7 @@ for (const music of payload) {
   for (const [apiDifficulty, difficulty] of Object.entries(difficultyMap)) {
     const chart = music.data[apiDifficulty]
     if (!chart || typeof chart !== 'object') continue
-    const level = String(chart.level ?? '').trim()
+    const level = levelLabel(chart.level)
     if (!level) continue
     const constant = chart.is_const_unknown === true ? null : Number(chart.const)
     const maxCombo = Number(chart.maxcombo)
