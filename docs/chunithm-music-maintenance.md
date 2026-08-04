@@ -11,20 +11,30 @@ BEAT ARCHIVEでは、利用者のスコア登録時にchunirec APIへアクセ�
 - 定期的なAPIアクセス、自動再試行、利用者ブラウザからのAPIアクセスは行いません。
 - 月次GitHub Actionsは運営者へのメール送信だけを行い、chunirec APIにはアクセスしません。
 
+## 初回準備
+
+リポジトリのルートで依存関係をインストールします。
+
+```powershell
+npm install
+```
+
 ## 手動更新
 
 ### PowerShell
 
 ```powershell
 $env:CHUNIREC_ACCESS_TOKEN="発行したアクセストークン"
-.\pnpm.cmd update:chunithm-music
+npm run update:chunithm-music
 Remove-Item Env:CHUNIREC_ACCESS_TOKEN
 ```
+
+環境変数は現在のPowerShellセッションだけに設定されます。処理後は`Remove-Item`で削除してください。
 
 ### macOS / Linux
 
 ```sh
-CHUNIREC_ACCESS_TOKEN="発行したアクセストークン" pnpm update:chunithm-music
+CHUNIREC_ACCESS_TOKEN="発行したアクセストークン" npm run update:chunithm-music
 ```
 
 スクリプトは次のエンドポイントへ1回だけアクセスします。
@@ -40,7 +50,7 @@ GET https://api.chunirec.net/2.0/music/showall.json?region=jp2&token=...
 1. `git diff -- src/generated/chunithmMusic.ts`で差分を確認します。
 2. 楽曲・譜面が不自然に大量削除されていないことを確認します。
 3. 新曲、レベル変更、譜面定数変更が想定範囲であることを確認します。
-4. `pnpm test`と`pnpm build`を実行します。
+4. `npm test`と`npm run build`を実行します。
 5. 問題がなければコミットします。
 
 APIエラー、空配列、生成譜面数が100未満の場合は既存ファイルを上書きしません。
